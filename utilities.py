@@ -4,9 +4,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import warnings
-from matplotlib.colors import TwoSlopeNorm
+from matplotlib.colors import TwoSlopeNorm, LogNorm
 from matplotlib.ticker import FuncFormatter, MultipleLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.transforms import ScaledTranslation
 import csv
 from typing import Dict, Optional, Any, Tuple
 from pathlib import Path
@@ -1914,3 +1915,811 @@ def plot_slices(simulations, **kwargs):
     print(export)
     fig.savefig(export, dpi=300, bbox_inches='tight', pad_inches=0.02)
     plt.close(fig)
+
+def _sanitize_spectrum_field_name(field):
+    clean = str(field).strip()
+    for char in (" ", "/", "\\", ":", ",", ";", "{", "}", "(", ")", "[", "]"):
+        clean = clean.replace(char, "_")
+    return clean
+
+def spectrum_filename(directory, field, kind="horizontal"):
+    kind_map = {
+        "horizontal": "spectrum_{field}.csv",
+        "isotropic": "spectrum_{field}.csv",
+        "k": "spectrum_{field}.csv",
+        "x": "spectrum_x_{field}.csv",
+        "streamwise": "spectrum_x_{field}.csv",
+        "kx": "spectrum_x_{field}.csv",
+        "y": "spectrum_y_{field}.csv",
+        "spanwise": "spectrum_y_{field}.csv",
+        "ky": "spectrum_y_{field}.csv",
+        "zsummary": "spectrum_zsummary_{field}.csv",
+        "summary": "spectrum_zsummary_{field}.csv",
+        "vertical_summary": "spectrum_zsummary_{field}.csv",
+        "height": "spectrum_height_{field}.csv",
+        "height_resolved": "spectrum_height_{field}.csv",
+        "yzplane": "spectrum_yzplane_{field}.csv",
+        "yz_plane": "spectrum_yzplane_{field}.csv",
+        "x_ky": "spectrum_yzplane_{field}.csv",
+    }
+    normalized = str(kind).lower()
+    if normalized not in kind_map:
+        raise ValueError(f"Unknown spectrum kind '{kind}'.")
+    clean_field = _sanitize_spectrum_field_name(field)
+    return os.path.join(os.fspath(directory), kind_map[normalized].format(field=clean_field))
+
+def _spectrum_kind_from_columns(columns):
+    cols = tuple(columns)
+    colset = set(cols)
+    if colset == {"k", "E"}:
+        return "horizontal"
+    if colset == {"kx", "E"}:
+        return "x"
+    if colset == {"ky", "E"}:
+        return "y"
+    if colset == {"k", "E", "z_centroid", "z_spread"}:
+        return "zsummary"
+    if colset == {"z", "k", "E"}:
+        return "height"
+    if colset == {"x", "ky", "E"}:
+        return "yzplane"
+    raise ValueError(f"Unrecognized spectrum CSV columns: {cols}")
+
+def read_spectrum_csv(filename, **kwargs):
+    path = os.fspath(filename)
+    fieldgain = kwargs.get("fieldgain", kwargs.get("scale", 1.0))
+    kgain = kwargs.get("kgain", 1.0)
+    lengthgain = kwargs.get("lengthgain", 1.0)
+
+    data = np.genfromtxt(path, delimiter=",", names=True, dtype=float, encoding=None)
+    if data.dtype.names is None:
+        raise ValueError(f"Spectrum CSV '{path}' must have a header row.")
+
+    columns = tuple(name.strip() for name in data.dtype.names)
+    kind = _spectrum_kind_from_columns(columns)
+
+    def col(name):
+        if name not in data.dtype.names:
+            return None
+        return np.atleast_1d(np.asarray(data[name], dtype=float))
+
+    spectrum = {
+        "source": "csv",
+        "filename": path,
+        "kind": kind,
+        "columns": columns,
+        "E": col("E") * fieldgain,
+    }
+
+    if kind in ("horizontal", "zsummary", "height"):
+        spectrum["k"] = col("k") * kgain
+        spectrum["coord_name"] = "k"
+    if kind == "x":
+        spectrum["kx"] = col("kx") * kgain
+        spectrum["coord_name"] = "kx"
+    if kind == "y":
+        spectrum["ky"] = col("ky") * kgain
+        spectrum["coord_name"] = "ky"
+    if kind == "yzplane":
+        spectrum["x"] = col("x") * lengthgain
+        spectrum["ky"] = col("ky") * kgain
+        spectrum["coord_name"] = ("x", "ky")
+    if kind == "zsummary":
+        spectrum["z_centroid"] = col("z_centroid") * lengthgain
+        spectrum["z_spread"] = col("z_spread") * lengthgain
+    if kind == "height":
+        spectrum["z"] = col("z") * lengthgain
+        spectrum["coord_name"] = ("z", "k")
+
+    return spectrum
+
+def _resolve_spectrum_filename(spec, **kwargs):
+    if "filename" in spec:
+        return spec["filename"]
+    directory = spec.get("directory", spec.get("dir", kwargs.get("directory", None)))
+    field = spec.get("field", kwargs.get("field", None))
+    kind = spec.get("kind", kwargs.get("kind", "horizontal"))
+    if directory is None or field is None:
+        raise KeyError("Spectrum specification must include 'filename' or both 'directory' and 'field'.")
+    return spectrum_filename(directory, field, kind=kind)
+
+def _copy_spectrum_dict(data):
+    copied = data.copy()
+    for key in ("k", "kx", "ky", "x", "z", "E", "z_centroid", "z_spread"):
+        if key in copied:
+            copied[key] = np.array(copied[key], copy=True)
+    return copied
+
+def _reduce_yzplane_spectrum(data, **kwargs):
+    if data.get("kind") != "yzplane":
+        return data
+
+    reduce_method = kwargs.get("yzplane_reduce", kwargs.get("x_reduce", "sum"))
+    x_bounds = kwargs.get("x_bounds", kwargs.get("xbounds", None))
+    if reduce_method in (None, False, "none", "raw"):
+        return data
+
+    x = np.asarray(data["x"], dtype=float)
+    ky = np.asarray(data["ky"], dtype=float)
+    energy = np.asarray(data["E"], dtype=float)
+    mask = np.isfinite(x) & np.isfinite(ky) & np.isfinite(energy)
+    if x_bounds is not None:
+        mask &= (x >= x_bounds[0]) & (x <= x_bounds[1])
+    if not np.any(mask):
+        raise ValueError("No yz-plane spectrum rows remain after applying x_bounds.")
+
+    x = x[mask]
+    ky = ky[mask]
+    energy = energy[mask]
+    ky_values = np.unique(ky)
+    reduced_energy = np.empty(len(ky_values), dtype=float)
+    counts = np.empty(len(ky_values), dtype=int)
+
+    for i, ky_value in enumerate(ky_values):
+        ky_mask = ky == ky_value
+        values = energy[ky_mask]
+        counts[i] = np.count_nonzero(ky_mask)
+        if reduce_method in ("sum", "integral"):
+            reduced_energy[i] = np.nansum(values)
+        elif reduce_method in ("mean", "average", "avg"):
+            reduced_energy[i] = np.nanmean(values)
+        elif reduce_method == "median":
+            reduced_energy[i] = np.nanmedian(values)
+        else:
+            raise ValueError("yzplane_reduce must be 'sum', 'mean', 'median', or 'none'.")
+
+    if kwargs.get("x_normalize", False) and reduce_method in ("sum", "integral"):
+        reduced_energy = reduced_energy / np.maximum(counts, 1)
+
+    return {
+        "source": data.get("source", "csv"),
+        "filename": data.get("filename", None),
+        "kind": "y",
+        "original_kind": "yzplane",
+        "columns": ("ky", "E"),
+        "ky": ky_values,
+        "E": reduced_energy,
+        "coord_name": "ky",
+        "yzplane_reduce": reduce_method,
+        "x_bounds": x_bounds,
+        "x_count": counts,
+    }
+
+def _weighted_spectrum_stat(values, weights, stat):
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    valid = np.isfinite(values)
+    if not np.any(valid):
+        return np.nan
+    values = values[valid]
+    weights = weights[valid]
+    if stat in ("sum", "integral"):
+        return np.nansum(values)
+    if stat in ("median",):
+        return np.nanmedian(values)
+    if stat in ("weighted", "weighted_mean", "energy_weighted"):
+        total_weight = np.nansum(weights)
+        if total_weight == 0:
+            return np.nanmean(values)
+        return np.nansum(values * weights) / total_weight
+    return np.nanmean(values)
+
+def _logbin_spectrum(data, coord_key, bins=80, stat="mean"):
+    coord = np.asarray(data[coord_key], dtype=float)
+    positive = coord > 0
+    if np.count_nonzero(positive) < 2:
+        return data
+
+    coord_pos = coord[positive]
+    edges = np.logspace(np.log10(np.nanmin(coord_pos)), np.log10(np.nanmax(coord_pos)), int(bins) + 1)
+    bin_index = np.digitize(coord, edges) - 1
+    smooth = _copy_spectrum_dict(data)
+    keep = []
+
+    for ibin in range(int(bins)):
+        mask = bin_index == ibin
+        if not np.any(mask):
+            continue
+        keep.append(ibin)
+
+    nbin = len(keep)
+    if nbin == 0:
+        return data
+
+    smooth[coord_key] = np.empty(nbin, dtype=float)
+    for key in ("E", "z_centroid", "z_spread"):
+        if key in data and len(data[key]) == len(coord):
+            smooth[key] = np.empty(nbin, dtype=float)
+
+    for out_i, ibin in enumerate(keep):
+        mask = bin_index == ibin
+        weights = data["E"][mask] if "E" in data else np.ones(np.count_nonzero(mask))
+        smooth[coord_key][out_i] = _weighted_spectrum_stat(coord[mask], weights, "weighted_mean")
+        for key in ("E", "z_centroid", "z_spread"):
+            if key in data and len(data[key]) == len(coord):
+                key_stat = "weighted_mean" if key in ("z_centroid", "z_spread") and stat == "mean" else stat
+                smooth[key][out_i] = _weighted_spectrum_stat(data[key][mask], weights, key_stat)
+
+    smooth["smoothed"] = True
+    smooth["smooth_method"] = "logbin"
+    smooth["smooth_bins"] = bins
+    smooth["smooth_stat"] = stat
+    return smooth
+
+def _moving_spectrum(data, coord_key, window=5, stat="mean"):
+    window = int(window)
+    if window <= 1:
+        return data
+    if window % 2 == 0:
+        window += 1
+    half_window = window // 2
+    coord = np.asarray(data[coord_key], dtype=float)
+    smooth = _copy_spectrum_dict(data)
+    smooth_keys = [key for key in ("E", "z_centroid", "z_spread") if key in data and len(data[key]) == len(coord)]
+
+    for i in range(len(coord)):
+        left = max(0, i - half_window)
+        right = min(len(coord), i + half_window + 1)
+        weights = data["E"][left:right] if "E" in data else np.ones(right - left)
+        for key in smooth_keys:
+            key_stat = "weighted_mean" if key in ("z_centroid", "z_spread") and stat == "mean" else stat
+            smooth[key][i] = _weighted_spectrum_stat(data[key][left:right], weights, key_stat)
+
+    smooth["smoothed"] = True
+    smooth["smooth_method"] = "moving"
+    smooth["smooth_window"] = window
+    smooth["smooth_stat"] = stat
+    return smooth
+
+def _smooth_height_spectrum(data, **kwargs):
+    method = kwargs.get("smooth_method", "logbin")
+    bins = kwargs.get("smooth_bins", 80)
+    window = kwargs.get("smooth_window", kwargs.get("smooth_bins", 5))
+    stat = kwargs.get("smooth_stat", "mean")
+    z_values = np.unique(data["z"])
+    pieces = []
+
+    for z_value in z_values:
+        mask = data["z"] == z_value
+        row = {
+            "kind": "horizontal",
+            "k": data["k"][mask],
+            "E": data["E"][mask],
+        }
+        if method == "logbin":
+            row = _logbin_spectrum(row, "k", bins=bins, stat=stat)
+        elif method in ("moving", "rolling"):
+            row = _moving_spectrum(row, "k", window=window, stat=stat)
+        else:
+            raise ValueError("smooth_method must be 'logbin' or 'moving'.")
+        pieces.append((z_value, row))
+
+    smooth = _copy_spectrum_dict(data)
+    smooth["z"] = np.concatenate([np.full(len(row["k"]), z_value) for z_value, row in pieces])
+    smooth["k"] = np.concatenate([row["k"] for _, row in pieces])
+    smooth["E"] = np.concatenate([row["E"] for _, row in pieces])
+    smooth["smoothed"] = True
+    smooth["smooth_method"] = method
+    smooth["smooth_stat"] = stat
+    return smooth
+
+def _smooth_spectrum(data, **kwargs):
+    if not kwargs.get("smooth", False):
+        data["smoothed"] = False
+        return data
+
+    method = kwargs.get("smooth_method", "logbin")
+    stat = kwargs.get("smooth_stat", "mean")
+    if data.get("kind") == "height":
+        if not kwargs.get("smooth_height", True):
+            data["smoothed"] = False
+            return data
+        return _smooth_height_spectrum(data, **kwargs)
+
+    coord_key = "k" if "k" in data else ("kx" if "kx" in data else ("ky" if "ky" in data else None))
+    if coord_key is None:
+        data["smoothed"] = False
+        return data
+    if method == "logbin":
+        return _logbin_spectrum(data, coord_key, bins=kwargs.get("smooth_bins", 80), stat=stat)
+    if method in ("moving", "rolling"):
+        return _moving_spectrum(data, coord_key, window=kwargs.get("smooth_window", kwargs.get("smooth_bins", 5)), stat=stat)
+    raise ValueError("smooth_method must be 'logbin' or 'moving'.")
+
+def _shift_spectrum_wavenumber_position(data, **kwargs):
+    position = kwargs.get("k_position", kwargs.get("wavenumber_position", "center"))
+    if position in (None, "center", "centroid", "bin_center"):
+        data["k_position"] = "center"
+        return data
+    if position not in ("lower", "left", "edge", "upper", "right"):
+        raise ValueError("k_position must be 'center', 'lower', or 'upper'.")
+
+    shifted = _copy_spectrum_dict(data)
+    for coord_key in ("k", "kx", "ky"):
+        if coord_key not in shifted:
+            continue
+        coord = np.asarray(shifted[coord_key], dtype=float)
+        if coord.size < 2:
+            continue
+        dk = np.empty_like(coord)
+        dk[1:] = np.diff(coord)
+        dk[0] = dk[1]
+        if position in ("lower", "left", "edge"):
+            shifted[coord_key] = coord - 0.5 * dk
+        else:
+            shifted[coord_key] = coord + 0.5 * dk
+        shifted[coord_key] = np.maximum(shifted[coord_key], 0.0)
+    shifted["k_position"] = "lower" if position in ("lower", "left", "edge") else "upper"
+    return shifted
+
+def _filter_nonpositive_spectrum_wavenumbers(data):
+    coord_key = "k" if "k" in data else ("kx" if "kx" in data else ("ky" if "ky" in data else None))
+    if coord_key is None:
+        return data
+    coord = np.asarray(data[coord_key], dtype=float)
+    finite = np.isfinite(coord)
+    scale = np.nanmax(np.abs(coord[finite])) if np.any(finite) else 1.0
+    tolerance = np.finfo(float).eps * max(scale, 1.0) * 100.0
+    mask = coord > tolerance
+    filtered = _copy_spectrum_dict(data)
+    for key in ("k", "kx", "ky", "z", "E", "z_centroid", "z_spread"):
+        if key in filtered and len(filtered[key]) == len(mask):
+            filtered[key] = filtered[key][mask]
+    return filtered
+
+def _prepare_plot_spectrum_data(filename, **kwargs):
+    fieldgain = kwargs.get("fieldgain", kwargs.get("scale", 1.0))
+    background = kwargs.get("background", None)
+    percentage = kwargs.get("percentage", False)
+    normalize = kwargs.get("normalize", None)
+    premultiply = kwargs.get("premultiply", False)
+    skip_zero = kwargs.get("skip_zero", kwargs.get("skip_k0", False))
+    xscale = kwargs.get("xscale", "log")
+
+    if isinstance(filename, dict):
+        d = _copy_spectrum_dict(filename)
+        if fieldgain != 1:
+            d["E"] *= fieldgain
+    else:
+        d = read_spectrum_csv(filename, **kwargs)
+    d = _reduce_yzplane_spectrum(d, **kwargs)
+
+    if background is not None:
+        bg = read_spectrum_csv(background, **kwargs) if not isinstance(background, dict) else _copy_spectrum_dict(background)
+        bg = _reduce_yzplane_spectrum(bg, **kwargs)
+        if d["kind"] != bg["kind"]:
+            raise ValueError("Cannot compare spectrum background with a different kind.")
+        coord_key = "k" if "k" in d else ("kx" if "kx" in d else "ky")
+        if not np.array_equal(d[coord_key], bg[coord_key]):
+            raise ValueError("Cannot subtract spectra with different coordinates.")
+        if percentage:
+            d["E"] = (d["E"] - bg["E"]) / bg["E"] * 100
+        else:
+            d["E"] = d["E"] - bg["E"]
+
+    d = _shift_spectrum_wavenumber_position(d, **kwargs)
+
+    coord_key = "k" if "k" in d else ("kx" if "kx" in d else ("ky" if "ky" in d else None))
+    if skip_zero or xscale == "log":
+        d = _filter_nonpositive_spectrum_wavenumbers(d)
+
+    d = _smooth_spectrum(d, **kwargs)
+    coord_key = "k" if "k" in d else ("kx" if "kx" in d else ("ky" if "ky" in d else None))
+
+    if premultiply and coord_key is not None:
+        d["E"] = d["E"] * d[coord_key]
+        d["premultiplied"] = True
+    else:
+        d["premultiplied"] = False
+
+    if normalize is not None and normalize is not False:
+        if normalize in ("max", "maximum", True):
+            denom = np.nanmax(np.abs(d["E"]))
+        elif normalize in ("integral", "sum"):
+            denom = np.nansum(d["E"])
+        else:
+            denom = float(normalize)
+        if denom != 0:
+            d["E"] = d["E"] / denom
+        d["normalized"] = normalize
+    else:
+        d["normalized"] = None
+
+    return d
+
+def _spectrum_line_xy(data, quantity="E"):
+    if quantity not in data:
+        raise KeyError(f"Spectrum quantity '{quantity}' is not available for kind '{data['kind']}'.")
+    if "k" in data:
+        return data["k"], data[quantity], "k"
+    if "kx" in data:
+        return data["kx"], data[quantity], "kx"
+    if "ky" in data:
+        return data["ky"], data[quantity], "ky"
+    raise ValueError("Height-resolved spectra are not line spectra.")
+
+def _default_spectrum_xlabel(coord_key):
+    labels = {
+        "k": r"$k$",
+        "kx": r"$k_x$",
+        "ky": r"$k_y$",
+    }
+    return labels.get(coord_key, coord_key)
+
+def _default_spectrum_ylabel(data, quantity="E", density=False):
+    if quantity == "z_centroid":
+        return r"$z_c$"
+    if quantity == "z_spread":
+        return r"$\sigma_z$"
+    if data.get("premultiplied", False):
+        return r"$kE(k)$"
+    return r"$E(k)$" if not density else r"$E(k)\,/\,\Delta k$"
+
+def _plot_spectrum_references(ax, references, **kwargs):
+    if not references:
+        return
+    for ref in references:
+        slope = ref["slope"]
+        k0, e0 = ref["anchor"]
+        xlim = ref.get("xlim", ax.get_xlim())
+        x = np.asarray(ref.get("x", np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), 80)))
+        x = x[x > 0]
+        y = e0 * (x / k0) ** slope
+        ax.plot(
+            x,
+            y,
+            color=ref.get("color", "0.35"),
+            linestyle=ref.get("linestyle", ref.get("ls", "--")),
+            linewidth=ref.get("linewidth", ref.get("lw", 0.8)),
+            alpha=ref.get("alpha", 0.75),
+            label=ref.get("label", None),
+            zorder=ref.get("zorder", 1),
+        )
+
+def _collect_wavenumber_markers(**kwargs):
+    markers = []
+    marker_defs = kwargs.get("wavenumber_markers", None)
+    if marker_defs:
+        if isinstance(marker_defs, dict):
+            marker_defs = [marker_defs]
+        markers.extend(marker_defs)
+
+    for length_key, label_default in (
+        ("turbine_diameter", r"$2\pi/D$"),
+        ("farm_length", r"$2\pi/L_f$"),
+    ):
+        length = kwargs.get(length_key, None)
+        if length is None:
+            continue
+        markers.append({
+            "length": length,
+            "label": kwargs.get(f"{length_key}_label", label_default),
+        })
+    return markers
+
+def _plot_wavenumber_markers(ax, **kwargs):
+    markers = _collect_wavenumber_markers(**kwargs)
+    if not markers:
+        return
+
+    default_color = kwargs.get("wavenumber_marker_color", "k")
+    default_linestyle = kwargs.get("wavenumber_marker_linestyle", "--")
+    default_alpha = kwargs.get("wavenumber_marker_alpha", 0.5)
+    default_linewidth = kwargs.get("wavenumber_marker_linewidth", kwargs.get("wavenumber_marker_lw", 0.8))
+    default_label = kwargs.get("wavenumber_marker_label", True)
+    default_ymin = kwargs.get("wavenumber_marker_ymin", None)
+    default_ymax = kwargs.get("wavenumber_marker_ymax", None)
+
+    ymin, ymax = ax.get_ylim()
+    for marker in markers:
+        if np.isscalar(marker):
+            marker = {"length": marker}
+        if "k" in marker:
+            k_value = float(marker["k"])
+        else:
+            length = float(marker["length"])
+            if length <= 0:
+                continue
+            k_value = 2.0 * np.pi / length
+        marker_ymin = marker.get("ymin", default_ymin)
+        marker_ymax = marker.get("ymax", default_ymax)
+        line_kwargs = {
+            "color": marker.get("color", default_color),
+            "linestyle": marker.get("linestyle", marker.get("ls", default_linestyle)),
+            "alpha": marker.get("alpha", default_alpha),
+            "linewidth": marker.get("linewidth", marker.get("lw", default_linewidth)),
+            "zorder": marker.get("zorder", 0),
+        }
+        if marker_ymin is None and marker_ymax is None:
+            ax.axvline(k_value, **line_kwargs)
+        else:
+            if marker_ymin is None:
+                marker_ymin = ymin
+            if marker_ymax is None:
+                marker_ymax = ymax
+            ax.vlines(k_value, marker_ymin, marker_ymax, **line_kwargs)
+        label = marker.get("label", None)
+        if label is not None and marker.get("show_label", default_label):
+            label_y = marker.get("label_y", kwargs.get("wavenumber_marker_label_y", None))
+            x_nudge = marker.get(
+                "label_x_nudge",
+                kwargs.get("wavenumber_marker_label_x_nudge", 3.0),
+            )
+            if label_y is None:
+                label_y = 0.04
+                label_transform = ax.get_xaxis_transform()
+            else:
+                label_transform = ax.transData
+            label_transform = label_transform + ScaledTranslation(
+                x_nudge / 72.0,
+                0.0,
+                ax.figure.dpi_scale_trans,
+            )
+            ax.text(
+                k_value,
+                label_y,
+                label,
+                rotation=90,
+                ha=marker.get("ha", "left"),
+                va=marker.get("va", "bottom"),
+                fontsize=marker.get("fontsize", _plot_fontsize(kwargs, "wavenumber_marker_fontsize", 6)),
+                color=marker.get("color", default_color),
+                alpha=marker.get("text_alpha", marker.get("alpha", default_alpha)),
+                transform=label_transform,
+            )
+    ax.set_ylim(ymin, ymax)
+
+def _plot_spectrum_line_on_axis(ax, data, label=None, **kwargs):
+    quantity = kwargs.get("quantity", "E")
+    x, y, coord_key = _spectrum_line_xy(data, quantity=quantity)
+    ax.plot(
+        x,
+        y,
+        label=label,
+        color=kwargs.get("color", None),
+        linewidth=kwargs.get("linewidth", kwargs.get("lw", 1.2)),
+        linestyle=kwargs.get("linestyle", kwargs.get("ls", "-")),
+        marker=kwargs.get("marker", None),
+        markersize=kwargs.get("markersize", kwargs.get("ms", None)),
+        alpha=kwargs.get("alpha", None),
+        zorder=kwargs.get("zorder", None),
+    )
+    return coord_key
+
+def _height_spectrum_grid(data):
+    z_values = np.unique(data["z"])
+    k_values = np.unique(data["k"])
+    grid = np.full((len(z_values), len(k_values)), np.nan)
+    z_index = {value: i for i, value in enumerate(z_values)}
+    k_index = {value: i for i, value in enumerate(k_values)}
+    for z, k, energy in zip(data["z"], data["k"], data["E"]):
+        grid[z_index[z], k_index[k]] = energy
+    return k_values, z_values, grid
+
+def _plot_height_spectrum_on_axis(ax, data, **kwargs):
+    cmap = kwargs.get("cmap", "viridis")
+    norm_type = kwargs.get("norm", kwargs.get("color_norm", "log"))
+    vmin = kwargs.get("vmin", None)
+    vmax = kwargs.get("vmax", None)
+    k, z, energy = _height_spectrum_grid(data)
+    if norm_type == "log":
+        positive = energy[np.isfinite(energy) & (energy > 0)]
+        if positive.size == 0:
+            norm = None
+        else:
+            norm = LogNorm(
+                vmin=np.nanmin(positive) if vmin is None else vmin,
+                vmax=np.nanmax(positive) if vmax is None else vmax,
+            )
+    elif norm_type in (None, "linear"):
+        norm = None
+    else:
+        norm = norm_type
+    K, Z = np.meshgrid(k, z)
+    return ax.pcolormesh(K, Z, energy, shading="auto", cmap=cmap, norm=norm, vmin=None if norm else vmin, vmax=None if norm else vmax)
+
+def _apply_spectrum_axes(ax, coord_key=None, data=None, **kwargs):
+    xscale = kwargs.get("xscale", "log")
+    yscale = kwargs.get("yscale", "log")
+    if data is not None and data.get("kind") == "height":
+        yscale = kwargs.get("yscale", "linear")
+    if xscale is not None:
+        ax.set_xscale(xscale)
+    if yscale is not None:
+        ax.set_yscale(yscale)
+
+    if kwargs.get("xlim", None) is not None:
+        ax.set_xlim(kwargs["xlim"])
+    if kwargs.get("ylim", None) is not None:
+        ax.set_ylim(kwargs["ylim"])
+    if kwargs.get("klim", None) is not None:
+        ax.set_xlim(kwargs["klim"])
+    if kwargs.get("zlim", None) is not None:
+        ax.set_ylim(kwargs["zlim"])
+    if kwargs.get("xleft", kwargs.get("xlft", None)) is not None:
+        ax.set_xlim(left=kwargs.get("xleft", kwargs.get("xlft", None)))
+    if kwargs.get("xright", kwargs.get("xrght", None)) is not None:
+        ax.set_xlim(right=kwargs.get("xright", kwargs.get("xrght", None)))
+    if kwargs.get("ybot", kwargs.get("ymin", None)) is not None:
+        ax.set_ylim(bottom=kwargs.get("ybot", kwargs.get("ymin", None)))
+    if kwargs.get("ytop", kwargs.get("ymax", None)) is not None:
+        ax.set_ylim(top=kwargs.get("ytop", kwargs.get("ymax", None)))
+
+    xlabel = kwargs.get("xlabel", None)
+    ylabel = kwargs.get("ylabel", None)
+    quantity = kwargs.get("quantity", "E")
+    density = kwargs.get("density", kwargs.get("write_density", False))
+    label_fontsize = _plot_fontsize(kwargs, "label_fontsize", 8)
+    tick_fontsize = _plot_fontsize(kwargs, "tick_fontsize", 7)
+    if xlabel is None and coord_key is not None:
+        xlabel = _default_spectrum_xlabel(coord_key)
+    if ylabel is None and data is not None:
+        ylabel = r"$z$" if data.get("kind") == "height" else _default_spectrum_ylabel(data, quantity, density)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel, fontsize=label_fontsize)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel, fontsize=label_fontsize)
+    if kwargs.get("title", None) is not None:
+        ax.set_title(kwargs["title"], fontsize=_plot_fontsize(kwargs, "title_fontsize", 9))
+    if kwargs.get("grid", False):
+        ax.grid(True, which=kwargs.get("grid_which", "both"), alpha=0.25, linewidth=0.5)
+    ax.tick_params(axis="both", which="major", labelsize=tick_fontsize)
+
+def plot_spectrum(filename, **kwargs):
+    _configure_latex_fonts()
+    export = kwargs.get("export", None)
+    dpi = kwargs.get("dpi", 300)
+    close = kwargs.get("close", True)
+    fig, ax = plt.subplots(figsize=kwargs.get("figsize", (5.2, 3.4)))
+    data = _prepare_plot_spectrum_data(filename, **kwargs)
+
+    if data["kind"] == "height":
+        cf = _plot_height_spectrum_on_axis(ax, data, **kwargs)
+        _apply_spectrum_axes(ax, coord_key="k", data=data, **kwargs)
+        _plot_wavenumber_markers(ax, **kwargs)
+        cbar = _add_matched_vertical_colorbar(
+            fig,
+            cf,
+            ax,
+            pad=kwargs.get("colorbar_pad", 0.08),
+            size=kwargs.get("colorbar_size", kwargs.get("colorbar_thickness", "2%")),
+        )
+        cbar.set_label(
+            kwargs.get("colorbar_label", _default_spectrum_ylabel(data, "E", kwargs.get("density", False))),
+            fontsize=_plot_fontsize(kwargs, "colorbar_label_fontsize", 7),
+        )
+        cbar.ax.tick_params(labelsize=kwargs.get("colorbar_tick_fontsize", _plot_fontsize(kwargs, "tick_fontsize", 7)))
+    else:
+        label = kwargs.get("label", None)
+        coord_key = _plot_spectrum_line_on_axis(ax, data, label=label, **kwargs)
+        _apply_spectrum_axes(ax, coord_key=coord_key, data=data, **kwargs)
+        _plot_wavenumber_markers(ax, **kwargs)
+        _plot_spectrum_references(ax, kwargs.get("references", None))
+        if kwargs.get("legend", label is not None or bool(kwargs.get("references", None))):
+            ax.legend(
+                frameon=kwargs.get("legend_frameon", False),
+                fontsize=_plot_fontsize(kwargs, "legend_fontsize", 7),
+                loc=kwargs.get("legend_loc", None),
+                ncols=kwargs.get("legend_ncols", kwargs.get("ncols", 1)),
+            )
+
+    if kwargs.get("tight_layout", True):
+        plt.tight_layout()
+    if export is None:
+        export = "spectrum.png"
+    print(export)
+    fig.savefig(
+        export,
+        dpi=dpi,
+        bbox_inches=kwargs.get("bbox_inches", "tight"),
+        pad_inches=kwargs.get("pad_inches", 0.02),
+    )
+    if close:
+        plt.close(fig)
+    return data
+
+def plot_spectra(simulations, **kwargs):
+    _configure_latex_fonts()
+    if not simulations:
+        raise ValueError("simulations must contain at least one simulation dictionary.")
+
+    prepared = []
+    for i, sim in enumerate(simulations):
+        if not isinstance(sim, dict):
+            raise TypeError(f"Simulation {i} must be a dictionary.")
+        panel_kwargs = kwargs.copy()
+        panel_kwargs.update(sim.get("plot_kwargs", {}))
+        filename = _resolve_spectrum_filename(sim, **kwargs)
+        prepared.append(_prepare_plot_spectrum_data(filename, **panel_kwargs))
+
+    height_mode = any(d["kind"] == "height" for d in prepared)
+    panel = kwargs.get("panel", height_mode)
+    export = kwargs.get("export", None)
+    dpi = kwargs.get("dpi", 300)
+    close = kwargs.get("close", True)
+
+    if panel:
+        ncols = kwargs.get("ncols", 1)
+        nrows = int(np.ceil(len(simulations) / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get("figsize", (5.2*ncols, 3.2*nrows)), squeeze=False)
+        axes_flat = axes.ravel()
+        cfs = []
+        for i, (sim, data, ax) in enumerate(zip(simulations, prepared, axes_flat)):
+            panel_kwargs = kwargs.copy()
+            panel_kwargs.update(sim.get("plot_kwargs", {}))
+            label = _format_simulation_label(i, sim.get("name", None), kwargs.get("annotation", "letter_name"))
+            if data["kind"] == "height":
+                cf = _plot_height_spectrum_on_axis(ax, data, **panel_kwargs)
+                cfs.append((ax, cf, panel_kwargs, data))
+                _apply_spectrum_axes(ax, coord_key="k", data=data, **panel_kwargs)
+                _plot_wavenumber_markers(ax, **panel_kwargs)
+            else:
+                coord_key = _plot_spectrum_line_on_axis(ax, data, label=sim.get("name", None), **panel_kwargs)
+                _apply_spectrum_axes(ax, coord_key=coord_key, data=data, **panel_kwargs)
+                _plot_wavenumber_markers(ax, **panel_kwargs)
+                _plot_spectrum_references(ax, panel_kwargs.get("references", None))
+                if panel_kwargs.get("legend", False):
+                    ax.legend(frameon=panel_kwargs.get("legend_frameon", False), fontsize=_plot_fontsize(panel_kwargs, "legend_fontsize", 7))
+            if label is not None:
+                ax.text(0.02, 1.02, label, transform=ax.transAxes, va="bottom", ha="left", fontsize=_plot_fontsize(panel_kwargs, "annotation_fontsize", 7), clip_on=False)
+
+        for ax in axes_flat[len(simulations):]:
+            fig.delaxes(ax)
+        if cfs and kwargs.get("colorbar", True):
+            for ax, cf, panel_kwargs, data in cfs:
+                cbar = _add_matched_vertical_colorbar(
+                    fig,
+                    cf,
+                    ax,
+                    pad=panel_kwargs.get("colorbar_pad", 0.08),
+                    size=panel_kwargs.get("colorbar_size", panel_kwargs.get("colorbar_thickness", "2%")),
+                )
+                cbar.set_label(
+                    panel_kwargs.get("colorbar_label", _default_spectrum_ylabel(data, "E", panel_kwargs.get("density", False))),
+                    fontsize=_plot_fontsize(panel_kwargs, "colorbar_label_fontsize", 7),
+                )
+                cbar.ax.tick_params(labelsize=panel_kwargs.get("colorbar_tick_fontsize", _plot_fontsize(panel_kwargs, "tick_fontsize", 7)))
+    else:
+        fig, ax = plt.subplots(figsize=kwargs.get("figsize", (5.2, 3.4)))
+        coord_key = None
+        for sim, data in zip(simulations, prepared):
+            panel_kwargs = kwargs.copy()
+            panel_kwargs.update(sim.get("plot_kwargs", {}))
+            coord_key = _plot_spectrum_line_on_axis(ax, data, label=sim.get("name", None), **panel_kwargs)
+        _apply_spectrum_axes(ax, coord_key=coord_key, data=prepared[0], **kwargs)
+        _plot_wavenumber_markers(ax, **kwargs)
+        _plot_spectrum_references(ax, kwargs.get("references", None))
+        if kwargs.get("legend", True):
+            legend_options = {
+                "frameon": kwargs.get("legend_frameon", False),
+                "fontsize": _plot_fontsize(kwargs, "legend_fontsize", 7),
+                "ncols": kwargs.get("legend_ncols", kwargs.get("ncols", 1)),
+            }
+            if kwargs.get("legend_loc", None) is not None:
+                legend_options["loc"] = kwargs["legend_loc"]
+            legend_options.update(kwargs.get("legend_kwargs", {}))
+            ax.legend(**legend_options)
+
+    if kwargs.get("stamp", None) is not None:
+        fig.text(
+            kwargs.get("stamp_location", (0.98, 0.98))[0],
+            kwargs.get("stamp_location", (0.98, 0.98))[1],
+            kwargs["stamp"],
+            ha=kwargs.get("stamp_ha", "right"),
+            va=kwargs.get("stamp_va", "top"),
+            fontsize=_plot_fontsize(kwargs, "stamp_fontsize", 9),
+        )
+    if kwargs.get("tight_layout", True):
+        plt.tight_layout()
+    if export is None:
+        export = "spectra.png"
+    print(export)
+    fig.savefig(
+        export,
+        dpi=dpi,
+        bbox_inches=kwargs.get("bbox_inches", "tight"),
+        pad_inches=kwargs.get("pad_inches", 0.02),
+    )
+    if close:
+        plt.close(fig)
+    return prepared
