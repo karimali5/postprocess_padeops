@@ -1,8 +1,9 @@
 from utilities import plot_spectra, plot_spectrum
 import numpy as np
+import os
 
-S800 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH800/slices_t092440_n014462", "timestamp": "092440", "nstamp": "014462"}
-S250 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397", "timestamp": "092897", "nstamp": "014397"}
+S800 = {"name":"S800", "path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH800/slices_t092440_n014462", "timestamp": "092440", "nstamp": "014462"}
+S250 = {"name":"S250", "path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397", "timestamp": "092897", "nstamp": "014397"}
 stations = [10,20,30,40,50,60,70,80,90,95,100,105,110,115,120,125,130,135,140,145,150,155,160,165,170,175,180,185,190,195,200,210,220,230,240,250,260,270,280,290,300,310,320,330,340,350,360,370,380,390,400,420,440,460,480,500,520,540]
 xfarm = 120
 yfarm = (95.61+63.11)/2
@@ -20,6 +21,84 @@ Lz = 63.49206349
 dx = Lx/nx
 dy = Ly/ny
 dz = Lz/nz
+sim = S800
+field = "ddy_tauxy"
+
+label_latex = {
+    "ddz_tauxz":r"$\partial_z \Delta \tau_{xz}$", 
+    "ddy_tauxy":r"$\partial_y \Delta \tau_{xy}$", 
+    "ddx_dp":r"$\partial_x \Delta p$", 
+    "ddz_dp":r"$\partial_z \Delta p$", 
+    }
+
+saved_settings={
+    "S800":{
+        "ddz_tauxz":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 5*10**(-4),
+            "wavenumber_marker_ymax": 2*10**(1),
+            "wavenumber_marker_label_y": 2*10**(0),
+        },
+        "ddy_tauxy":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-5),
+            "wavenumber_marker_ymax": 1*10**(2),
+            "wavenumber_marker_label_y": 9*10**(0),
+        },
+        "ddx_dp":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-4),
+            "wavenumber_marker_ymax": 8*10**(0),
+            "wavenumber_marker_label_y": 1*10**(0),
+        },
+        "ddz_dp":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-4),
+            "ytop": 1*10**(1),
+            "wavenumber_marker_ymax": 2*10**(0),
+            "wavenumber_marker_label_y": 6*10**(-1),
+        },
+    },
+
+    "S250":{
+        "ddz_tauxz":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 5*10**(-4),
+            "wavenumber_marker_ymax": 2*10**(1),
+            "wavenumber_marker_label_y": 2*10**(0),
+        },
+        "ddy_tauxy":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-5),
+            "wavenumber_marker_ymax": 1*10**(2),
+            "wavenumber_marker_label_y": 9*10**(0),
+        },
+        "ddx_dp":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-4),
+            "wavenumber_marker_ymax": 8*10**(0),
+            "wavenumber_marker_label_y": 1*10**(0),
+        },
+        "ddz_dp":{
+            "smooth_bins":200,
+            "xright": 2*np.pi/(3.5*dy),
+            "ybot": 1*10**(-4),
+            "ytop": 1*10**(1),
+            "wavenumber_marker_ymax": 2*10**(0),
+            "wavenumber_marker_label_y": 6*10**(-1),
+        }
+    },
+}
+
+def saved_setting(key):
+    return saved_settings.get(sim["name"], {}).get(field, {}).get(key, None)
 
 # Spectrum file selection
 # kind: Spectrum.F90 output family. Options include horizontal, x/streamwise,
@@ -38,18 +117,20 @@ spectrum_selection = {
 # kgain: Multiplier applied to k, kx, and ky.
 # background: Optional spectrum CSV/dict to subtract.
 # percentage: If background is set, plot percent change relative to background.
-# normalize: None, "max", "integral"/"sum", True, or a numeric divisor.
+# normalize: None, "parseval"/"variance", "max", "integral"/"sum", True, or a numeric divisor.
+# normalize_reference: CSV used when normalize="parseval"; use one file to preserve relative curve magnitudes.
 # premultiply: Plot kE instead of E for line spectra.
 # density: Label helper for spectra written with write_density=.true.
 # skip_zero: Remove k=0 before log-axis plotting.
 # k_position: Plot CSV wavenumbers as bin "center", "lower", or "upper" edges.
 data_style = {
     "fieldgain": 1.0,
-    "lengthgain": 1.0/hubheight,
+    "lengthgain": 1.0,
     "kgain": 1.0,
     "background": None,
     "percentage": False,
-    "normalize": None,
+    "normalize": "parseval",
+    "normalize_reference": os.path.join(sim["path"], f"spectrum_{field}.csv"),
     "premultiply": True,
     "density": True,
     "skip_zero": True,
@@ -113,7 +194,7 @@ yzplane_style = {
 smoothing_style = {
     "smooth": True,
     "smooth_method": "logbin",
-    "smooth_bins": 150,
+    "smooth_bins": saved_setting("smooth_bins"),
     "smooth_window": 5,
     "smooth_stat": "mean",
     "smooth_height": True,
@@ -135,12 +216,12 @@ axis_style = {
     "klim": None,
     "zlim": None,
     "xleft": None,
-    "xright": 2*np.pi/(3.5*dy),
-    "ybot": 10**(-12),
-    "ytop": None,
+    "xright": saved_setting("xright"),
+    "ybot": saved_setting("ybot"),
+    "ytop": saved_setting("ytop"),
     "xlabel": r"$k_\alpha$",
-    "ylabel": r"$k_\alpha E_\alpha(k_\alpha)$",
-    "title": r"$\partial_z \tau_{xz}$",
+    "ylabel": r"$k_\alpha E_\alpha/\langle q^2 \rangle$",
+    "title": label_latex[field],
     "grid": False,
     "grid_which": "both",
     "quantity": "E",
@@ -168,18 +249,24 @@ reference_style = {
 # wavenumber_marker_*: Default style for all marker lines/text.
 wavenumber_marker_style = {
     "turbine_diameter": 1,
-    "farm_length": 40,
+    "farm_length": Lfarm,
     "turbine_diameter_label": r"$2\pi$",
     "farm_length_label": r"$2\pi D/L_f$",
-    "wavenumber_markers": [{"length": 2.5, "label":r"$4\pi/5$"}, {"length": Lx, "label":r"$2\pi D/L_x$"}, {"length": Ly, "label":r"$2\pi D/L_y$"}],
+    "wavenumber_markers": 
+    [
+        {"length": 2.5, "label":r"$4\pi D/s_y$"},
+        {"length": 5, "label":r"$2\pi D/s_x$"}, 
+        {"length": Lx, "label":r"$2\pi D/L_x$"}, 
+        {"length": Ly, "label":r"$2\pi D/L_y$"},
+    ],
     "wavenumber_marker_color": "k",
     "wavenumber_marker_linestyle": "--",
     "wavenumber_marker_alpha": 0.7,
     "wavenumber_marker_linewidth": 0.8,
     "wavenumber_marker_ymin": None,
-    "wavenumber_marker_ymax": 10**(-7),
+    "wavenumber_marker_ymax": saved_setting("wavenumber_marker_ymax"),
     "wavenumber_marker_label": True,
-    "wavenumber_marker_label_y": 2*10**(-12),
+    "wavenumber_marker_label_y": saved_setting("wavenumber_marker_label_y"),
     "wavenumber_marker_label_x_nudge": -8.0,
     "wavenumber_marker_fontsize": 6,
 }
@@ -207,7 +294,7 @@ layout_style = {
     "tight_layout": True,
     "bbox_inches": "tight",
     "pad_inches": 0.02,
-    "export": "spectra.png",
+    "export": f"spectra_{sim["name"]}_{field}.png",
 }
 
 # Legend options
@@ -281,7 +368,7 @@ example_simulations = [
     # {"directory": "/path/to/output", "field": "u", "kind": "horizontal", "name": "case A"},
     # {"directory": "/path/to/output", "field": "u", "kind": "x", "name": "case A"},
     {
-        "filename": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397/spectrum_ddz_tauxz.csv",
+        "filename": os.path.join(sim["path"],f"spectrum_{field}.csv"),
         "name": r"Horizontal $(\alpha=h)$",
         "plot_kwargs": {
               "color": "k",
@@ -292,7 +379,7 @@ example_simulations = [
     },
 
     {
-        "filename": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397/spectrum_x_ddz_tauxz.csv",
+        "filename": os.path.join(sim["path"], f"spectrum_x_{field}.csv"),
         "name": r"Streamwise $(\alpha=x)$",
         "plot_kwargs": {
               "color": "tab:blue",
@@ -303,7 +390,7 @@ example_simulations = [
     },
 
     {
-        "filename": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397/spectrum_y_ddz_tauxz.csv",
+        "filename": os.path.join(sim["path"],f"spectrum_y_{field}.csv"),
         "name": r"Lateral $(\alpha=y)$",
         "plot_kwargs": {
               "color": "tab:red",
@@ -313,18 +400,6 @@ example_simulations = [
           },
     },
 
-#     {
-#       "filename": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397/spectrum_yzplane_ddz_tauxz.csv",
-#       "name": r"$\sum_x E_y(x,k_y;\,\partial_z\tau_{xz})$",
-#       "plot_kwargs": {
-#           "color": "tab:green",
-#           "yzplane_reduce": "sum",
-#           "linestyle": "-",
-#           "linewidth": 1.4,
-#           "k_position": "center",
-#           "x_bounds": None,
-#       },
-#   }
 ]
 
 if __name__ == "__main__":

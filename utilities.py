@@ -2267,6 +2267,61 @@ def _filter_nonpositive_spectrum_wavenumbers(data):
             filtered[key] = filtered[key][mask]
     return filtered
 
+def _spectrum_coordinate_key(data):
+    if "k" in data:
+        return "k"
+    if "kx" in data:
+        return "kx"
+    if "ky" in data:
+        return "ky"
+    return None
+
+def _spectrum_bin_width(coord):
+    coord = np.asarray(coord, dtype=float)
+    finite = np.isfinite(coord)
+    values = coord[finite]
+    if values.size < 2:
+        return 1.0
+    diffs = np.diff(np.sort(values))
+    diffs = diffs[np.isfinite(diffs) & (diffs > 0)]
+    if diffs.size == 0:
+        return 1.0
+    return np.nanmedian(diffs)
+
+def _spectrum_parseval_energy(data, density=False):
+    energy = np.asarray(data["E"], dtype=float)
+    total = np.nansum(energy)
+    if data.get("kind") == "height" and "z" in data:
+        z_count = len(np.unique(data["z"]))
+        if z_count > 0:
+            total = total / z_count
+    if data.get("original_kind") == "yzplane" and data.get("yzplane_reduce") in ("sum", "integral"):
+        x_count = np.asarray(data.get("x_count", []), dtype=float)
+        x_count = x_count[np.isfinite(x_count) & (x_count > 0)]
+        if x_count.size > 0:
+            total = total / np.nanmedian(x_count)
+
+    if not density:
+        return total
+
+    coord_key = _spectrum_coordinate_key(data)
+    if coord_key is None:
+        return total
+    return total * _spectrum_bin_width(data[coord_key])
+
+def _spectrum_parseval_reference_energy(reference, **kwargs):
+    if isinstance(reference, dict):
+        data = _copy_spectrum_dict(reference)
+    else:
+        data = read_spectrum_csv(reference, **kwargs)
+    data = _reduce_yzplane_spectrum(data, **kwargs)
+    return _spectrum_parseval_energy(data, density=kwargs.get("density", kwargs.get("write_density", False)))
+
+def _normalization_reference_key(reference):
+    if isinstance(reference, dict):
+        return id(reference)
+    return os.fspath(reference)
+
 def _prepare_plot_spectrum_data(filename, **kwargs):
     fieldgain = kwargs.get("fieldgain", kwargs.get("scale", 1.0))
     background = kwargs.get("background", None)
@@ -2297,14 +2352,26 @@ def _prepare_plot_spectrum_data(filename, **kwargs):
         else:
             d["E"] = d["E"] - bg["E"]
 
+    if normalize in ("parseval", "variance", "energy", "physical"):
+        reference = kwargs.get("normalize_reference", kwargs.get("normalization_reference", None))
+        if reference is None:
+            normalize = _spectrum_parseval_energy(d, density=kwargs.get("density", kwargs.get("write_density", False)))
+        else:
+            normalize = _spectrum_parseval_reference_energy(reference, **kwargs)
+            printed = kwargs.setdefault("_printed_normalization_references", set())
+            reference_key = _normalization_reference_key(reference)
+            if reference_key not in printed:
+                print(f"Parseval normalization from {reference_key}: {normalize:.16e}")
+                printed.add(reference_key)
+
     d = _shift_spectrum_wavenumber_position(d, **kwargs)
 
-    coord_key = "k" if "k" in d else ("kx" if "kx" in d else ("ky" if "ky" in d else None))
+    coord_key = _spectrum_coordinate_key(d)
     if skip_zero or xscale == "log":
         d = _filter_nonpositive_spectrum_wavenumbers(d)
 
     d = _smooth_spectrum(d, **kwargs)
-    coord_key = "k" if "k" in d else ("kx" if "kx" in d else ("ky" if "ky" in d else None))
+    coord_key = _spectrum_coordinate_key(d)
 
     if premultiply and coord_key is not None:
         d["E"] = d["E"] * d[coord_key]
@@ -2622,6 +2689,7 @@ def plot_spectra(simulations, **kwargs):
     _configure_latex_fonts()
     if not simulations:
         raise ValueError("simulations must contain at least one simulation dictionary.")
+    kwargs.setdefault("_printed_normalization_references", set())
 
     prepared = []
     for i, sim in enumerate(simulations):
