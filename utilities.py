@@ -1190,6 +1190,259 @@ def read_streamtube(file):
     else:
         raise ValueError("Streamtube file must have extension '.csv' or '.npz'.")
 
+def _polygon_area(y, z):
+    y = np.asarray(y, dtype=float)
+    z = np.asarray(z, dtype=float)
+
+    if y.size < 3:
+        return 0.0
+
+    return 0.5 * abs(np.dot(y, np.roll(z, -1)) - np.dot(z, np.roll(y, -1)))
+
+def _points_in_polygon(y_poly, z_poly, y_points, z_points, tol=1.0e-12):
+    y_poly = np.asarray(y_poly, dtype=float)
+    z_poly = np.asarray(z_poly, dtype=float)
+    yp = np.asarray(y_points, dtype=float)
+    zp = np.asarray(z_points, dtype=float)
+
+    inside = np.zeros(np.broadcast(yp, zp).shape, dtype=bool)
+    yp, zp = np.broadcast_arrays(yp, zp)
+    inside = inside.reshape(-1)
+    yp_flat = yp.reshape(-1)
+    zp_flat = zp.reshape(-1)
+    on_boundary = np.zeros_like(inside)
+
+    nv = y_poly.size
+    j = nv - 1
+
+    for i in range(nv):
+        yi, zi = y_poly[i], z_poly[i]
+        yj, zj = y_poly[j], z_poly[j]
+
+        dy_edge = yj - yi
+        dz_edge = zj - zi
+        cross = (yp_flat - yi) * dz_edge - (zp_flat - zi) * dy_edge
+        within_y = (yp_flat >= min(yi, yj) - tol) & (yp_flat <= max(yi, yj) + tol)
+        within_z = (zp_flat >= min(zi, zj) - tol) & (zp_flat <= max(zi, zj) + tol)
+        on_boundary |= (np.abs(cross) <= tol) & within_y & within_z
+
+        crosses = ((zi > zp_flat) != (zj > zp_flat))
+        y_at_z = (yj - yi) * (zp_flat - zi) / (zj - zi + np.finfo(float).eps) + yi
+        inside ^= crosses & (yp_flat < y_at_z)
+        j = i
+
+    inside |= on_boundary
+    return inside.reshape(yp.shape)
+
+def _segments_intersect(a, b, c, d, tol=1.0e-12):
+    def orient(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    def on_segment(p, q, r):
+        return (
+            min(p[0], r[0]) - tol <= q[0] <= max(p[0], r[0]) + tol
+            and min(p[1], r[1]) - tol <= q[1] <= max(p[1], r[1]) + tol
+        )
+
+    o1 = orient(a, b, c)
+    o2 = orient(a, b, d)
+    o3 = orient(c, d, a)
+    o4 = orient(c, d, b)
+
+    if (o1 > tol and o2 < -tol or o1 < -tol and o2 > tol) and (
+        o3 > tol and o4 < -tol or o3 < -tol and o4 > tol
+    ):
+        return True
+
+    if abs(o1) <= tol and on_segment(a, c, b):
+        return True
+    if abs(o2) <= tol and on_segment(a, d, b):
+        return True
+    if abs(o3) <= tol and on_segment(c, a, d):
+        return True
+    if abs(o4) <= tol and on_segment(c, b, d):
+        return True
+
+    return False
+
+def _polygon_intersects_rectangle(y_poly, z_poly, ylo, yhi, zlo, zhi):
+    if np.any((y_poly >= ylo) & (y_poly <= yhi) & (z_poly >= zlo) & (z_poly <= zhi)):
+        return True
+
+    rect_edges = (
+        ((ylo, zlo), (yhi, zlo)),
+        ((yhi, zlo), (yhi, zhi)),
+        ((yhi, zhi), (ylo, zhi)),
+        ((ylo, zhi), (ylo, zlo)),
+    )
+
+    nv = y_poly.size
+    for p in range(nv):
+        a = (y_poly[p], z_poly[p])
+        b = (y_poly[(p + 1) % nv], z_poly[(p + 1) % nv])
+        for c, d in rect_edges:
+            if _segments_intersect(a, b, c, d):
+                return True
+
+    return False
+
+def _cell_area_fraction(y_poly, z_poly, ylo, yhi, zlo, zhi, cutcell_samples):
+    corners_y = np.array([ylo, yhi, yhi, ylo])
+    corners_z = np.array([zlo, zlo, zhi, zhi])
+    corners_inside = _points_in_polygon(y_poly, z_poly, corners_y, corners_z)
+    ninside = int(np.count_nonzero(corners_inside))
+
+    if ninside == 4:
+        return 1.0
+
+    if ninside == 0 and not _polygon_intersects_rectangle(y_poly, z_poly, ylo, yhi, zlo, zhi):
+        return 0.0
+
+    nsamp_y, nsamp_z = cutcell_samples
+    nsamp_y = max(3, int(nsamp_y))
+    nsamp_z = max(3, int(nsamp_z))
+
+    y_local = ylo + (np.arange(nsamp_y, dtype=float) + 0.5) * (yhi - ylo) / nsamp_y
+    z_local = zlo + (np.arange(nsamp_z, dtype=float) + 0.5) * (zhi - zlo) / nsamp_z
+    yy, zz = np.meshgrid(y_local, z_local, indexing="ij")
+    inside = _points_in_polygon(y_poly, z_poly, yy, zz)
+
+    return float(np.count_nonzero(inside) / inside.size)
+
+def _interpolate_x_plane(field, x, dx, x0=0.0, periodic=False):
+    nx = field.shape[0]
+
+    if periodic:
+        length = nx * dx
+        x = ((x - x0) % length) + x0
+
+    s = (x - x0) / dx
+
+    if not periodic and (s < 0.0 or s > nx - 1):
+        raise ValueError(
+            f"x={x} is outside the streamwise velocity field range "
+            f"[{x0}, {x0 + (nx - 1) * dx}]."
+        )
+
+    i0 = int(np.floor(s))
+    if periodic:
+        i0 %= nx
+        i1 = (i0 + 1) % nx
+    else:
+        i1 = min(i0 + 1, nx - 1)
+    w1 = s - i0
+    w0 = 1.0 - w1
+
+    return w0 * field[i0, :, :] + w1 * field[i1, :, :]
+
+def compute_streamtube_stats(
+    streamtube_file,
+    velocity_file,
+    nx,
+    ny,
+    nz,
+    x_stations,
+    dx,
+    dy,
+    dz,
+    *,
+    x0=0.0,
+    y0=0.0,
+    z0=0.0,
+    cutcell_samples=(11, 11),
+    periodic_x=False,
+):
+    """
+    Compute streamtube contour area and streamwise mass flow rate.
+
+    The streamwise velocity file is read as float64 and reshaped to
+    ``(nx, ny, nz)``. Grid values are treated as cell-centered in y and z, so
+    cell vertices are offset by ``0.5 * dy`` and ``0.5 * dz`` from each center.
+    """
+
+    nx = int(nx)
+    ny = int(ny)
+    nz = int(nz)
+    x_stations = np.asarray(x_stations, dtype=float)
+
+    if x_stations.ndim != 1:
+        raise ValueError("x_stations must be a one-dimensional array.")
+
+    streamtube = read_streamtube(streamtube_file)
+    u = np.fromfile(velocity_file, dtype=np.dtype(np.float64), count=-1)
+
+    expected_size = nx * ny * nz
+    if u.size != expected_size:
+        raise ValueError(
+            f"Velocity file contains {u.size} values, expected {expected_size} "
+            f"for shape ({nx}, {ny}, {nz})."
+        )
+
+    u = u.reshape((nx, ny, nz))
+
+    y_centers = y0 + np.arange(ny, dtype=float) * dy
+    z_centers = z0 + np.arange(nz, dtype=float) * dz
+    cell_area = dy * dz
+
+    areas = np.zeros_like(x_stations, dtype=float)
+    mass_flow_rates = np.zeros_like(x_stations, dtype=float)
+
+    for istation, x in enumerate(x_stations):
+        print(istation, x)
+        y_poly, z_poly = interpolate_streamtube(streamtube, x)
+
+        if y_poly is None or z_poly is None:
+            areas[istation] = np.nan
+            mass_flow_rates[istation] = np.nan
+            continue
+
+        y_poly = np.asarray(y_poly, dtype=float)
+        z_poly = np.asarray(z_poly, dtype=float)
+        valid = np.isfinite(y_poly) & np.isfinite(z_poly)
+        y_poly = y_poly[valid]
+        z_poly = z_poly[valid]
+
+        if y_poly.size < 3:
+            areas[istation] = np.nan
+            mass_flow_rates[istation] = np.nan
+            continue
+
+        areas[istation] = _polygon_area(y_poly, z_poly)
+        u_plane = _interpolate_x_plane(u, x, dx, x0=x0, periodic=periodic_x)
+
+        ymin = np.min(y_poly)
+        ymax = np.max(y_poly)
+        zmin = np.min(z_poly)
+        zmax = np.max(z_poly)
+
+        q = 0.0
+        for j, yc in enumerate(y_centers):
+            ylo = yc - 0.5 * dy
+            yhi = yc + 0.5 * dy
+
+            if yhi < ymin or ylo > ymax:
+                continue
+
+            for k, zc in enumerate(z_centers):
+                zlo = zc - 0.5 * dz
+                zhi = zc + 0.5 * dz
+
+                if zhi < zmin or zlo > zmax:
+                    continue
+
+                frac = _cell_area_fraction(y_poly, z_poly, ylo, yhi, zlo, zhi, cutcell_samples)
+
+                if frac > 0.0:
+                    q += u_plane[j, k] * frac * cell_area
+
+        mass_flow_rates[istation] = q
+
+    return {
+        "x": x_stations,
+        "area": areas,
+        "mass_flow_rate": mass_flow_rates,
+    }
+
 def make_mp4(png_files, output_mp4, fps=10, quality=8):
     """
     Create an MP4 animation from an ordered list of PNG files.

@@ -210,7 +210,7 @@ smoothing_style = {
 # quantity: Quantity to plot from CSV. Use E, z_centroid, or z_spread when available.
 axis_style = {
     "xscale": "log",
-    "yscale": "log",
+    "yscale": None,
     "xlim": None,
     "ylim": None,
     "klim": None,

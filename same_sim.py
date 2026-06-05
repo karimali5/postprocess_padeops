@@ -48,8 +48,8 @@ field_style = {
 }
 
 axis_style = {
-    "equal_aspect": False,
-    "ytop": 25*hubheight,
+    "equal_aspect": True,
+    "ytop": 15*hubheight,
     "ybot": None,
     # "xlft": xfarm-2.5*Lfarm,
     # "xrght": xfarm+10*Lfarm,
@@ -73,7 +73,7 @@ axis_style = {
     "yaxis_transformer": {
         "function": lambda z: z / hubheight,
         "inverse": lambda zt: zt * hubheight,
-        "ticks": np.arange(0, 26, 5),
+        "ticks": np.arange(0, 16, 5),
         "label": r"$z/z_h$",
     },
     "transform_axes_data": False,
@@ -113,29 +113,300 @@ font_style = {
     "stamp_va": "top",
 }
 
-for x in stations:
+for x in [200]:
     station_blh_files = blh_files(sim, {"axis":'x', 'value':x})
     plot_slices(
         [
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term01_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term04_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term12_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term12_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term06_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term15_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget1_term15_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta k$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 0.5,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term01_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term02_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term03_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term04_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term05_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta (u_j \partial_j k)\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term06_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term08_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term09_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term10_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term11_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term12_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_k\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term08_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term09_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term10_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term11_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term12_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_k - \Delta \mathcal{P}_{6}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term06_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{6}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{7}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term08_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{8}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term09_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{9}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term10_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{10}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term11_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{11}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget4_term12_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta \mathcal{P}_{12}\,(\times10^{-3})$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     #"s":0.14,
+            # },
+
             {
                 "filename": [
-                    os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term01_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term13_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term14_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term15_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term16_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term17_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term18_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term19_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
                 ],
-                "name": r"$\Delta u$",
+                "name": r"$\Delta \mathcal{T}_k\,(\times10^{-3})$",
                 "blh_file": station_blh_files,
-                "fieldgain": 1,
-                "s":0.14,
+                "fieldgain": -1000,
+                #"s":0.14,
             },
 
             {
                 "filename": [
-                    os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term03_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term13_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
                 ],
-                "name": r"$\Delta w$",
+                "name": r"$\Delta \mathcal{T}_{13}\,(\times10^{-3})$",
                 "blh_file": station_blh_files,
-                "fieldgain": 1,
-                "s":0.05,
+                "fieldgain": -1000,
+                #"s":0.14,
             },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term14_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{14}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term15_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{15}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term16_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{16}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term17_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{17}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term18_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{18}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(sim["path"], f"Run09_comp_deficit_budget3_term19_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{T}_{19}\,(\times10^{-3})$",
+                "blh_file": station_blh_files,
+                "fieldgain": -1000,
+                #"s":0.14,
+            },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term01_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta u$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1,
+            #     "s":0.14,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget5_term07_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$U_0 \partial_x \Delta u\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":100,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget5_term01_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta u \partial_x \Delta u\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":30,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget5_term08_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$V_0 \partial_y \Delta u\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":5,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget5_term02_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta v \partial_y \Delta u\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":15,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget5_term06_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$U_0^\prime \Delta w\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":10,
+            # },
+
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term03_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta w$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1,
+            #     "s":0.05,
+            # },
 
             # {
             #     "filename": [
@@ -179,25 +450,25 @@ for x in stations:
             #     "s":14,
             # },
 
-            {
-                "filename": [
-                    os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term20_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
-                ],
-                "name": r"$-\partial_z \Delta p\,\left(\times 10^{-3}\right)$",
-                "blh_file": station_blh_files,
-                "fieldgain": -1000,
-                "s":14,
-            },
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term20_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$-\partial_z \Delta p\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": -1000,
+            #     "s":14,
+            # },
 
-            {
-                "filename": [
-                    os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term17_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
-                ],
-                "name": r"$\Delta w_b\,\left(\times 10^{-3}\right)$",
-                "blh_file": station_blh_files,
-                "fieldgain": 1000,
-                "s":6,
-            },
+            # {
+            #     "filename": [
+            #         os.path.join(sim["path"], f"Run09_comp_deficit_budget0_term17_t"+sim["timestamp"]+"_n"+sim["nstamp"]+f"_SL_x={x}.nc"),
+            #     ],
+            #     "name": r"$\Delta w_b\,\left(\times 10^{-3}\right)$",
+            #     "blh_file": station_blh_files,
+            #     "fieldgain": 1000,
+            #     "s":6,
+            # },
             
         ],
         stamp=rf"$x-x_0={(x-xfarm)/Lfarm:.2f}L_f$",
@@ -207,7 +478,7 @@ for x in stations:
         **overlay_style,
         **colorbar_style,
         **font_style,
-        export=f"S800_buoyancy_x={x}.png",
+        export=f"S800_TKE_Transport_x={x}.png",
     )
 
 # station_blh_files = blh_files(sim, {"axis":'y', 'value':yfarm})
