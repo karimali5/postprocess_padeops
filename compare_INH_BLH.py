@@ -2,7 +2,7 @@ from utilities import inversion_height, plot_slices, read_netcdf_slice
 import numpy as np
 import os
 
-xfarm = 120
+xfarm = 160
 yfarm = (95.61+63.11)/2
 zfarm = (95-126/2)/126
 Lfarm = 40
@@ -10,13 +10,20 @@ Wfarm = 95.61-63.11
 Zfarm = 1
 hubheight = 95/126
 
-S800 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH800/slices_t092440_n014462", "timestamp": "092440", "nstamp": "014462"}
+S800_2K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV800-2K/slices", "timestamp": "101643", "nstamp": "019053"}
+S800_5K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/slices", "timestamp": "101691", "nstamp": "019053"}
+
 S250 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397", "timestamp": "092897", "nstamp": "014397"}
 
-h1_prcntg_S800, h1l = inversion_height(S800, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
-dh_prcntg_S800, dhl = inversion_height(S800, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
-h1_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
-dh_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
+# h1_prcntg_S800, h1l = inversion_height(S800, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
+# dh_prcntg_S800, dhl = inversion_height(S800, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
+# h1_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
+# dh_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
+
+h1_prcntg_S800_2K, h1l = inversion_height(S800_2K, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
+dh_prcntg_S800_2K, dhl = inversion_height(S800_2K, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
+h1_prcntg_S800_5K, h1l = inversion_height(S800_5K, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
+dh_prcntg_S800_5K, dhl = inversion_height(S800_5K, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
 
 def blh_fractional_change(sim, run=9, base_run=8, scale=1/126, smooth=True, l_smooth=2):
     smooth_kwargs = {"smooth": smooth, "l_smooth": l_smooth}
@@ -32,13 +39,13 @@ def blh_fractional_change(sim, run=9, base_run=8, scale=1/126, smooth=True, l_sm
     delta["data"] = delta["data"] / base["data"] * 100
     return delta
 
-BLH_S800 = blh_fractional_change(S800)
-BLH_S250 = blh_fractional_change(S250)
+# BLH_S800 = blh_fractional_change(S800)
+# BLH_S250 = blh_fractional_change(S250)
 
 plot_style = {
     "ncols": 2,
     "panel_order": "column",
-    "figsize": (10, 5),
+    "figsize": (10, 2.7),
     "wspace": 0.3,
     "annotation": "letter_name",
 }
@@ -114,48 +121,68 @@ font_style = {
 plot_slices(
     [
         {
-            "filename": h1_prcntg_S800,
-            "name": r"$H_{\textrm{inv}}=800\,m$",
+            "filename": h1_prcntg_S800_5K,
+            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=5K$",
             "plot_kwargs":{
-                "colorbar_label": h1l
+                "colorbar_label": h1l,
+                "s": 2.7,
             }
         },
         {
-            "filename": dh_prcntg_S800,
-            "name": r"$H_{\textrm{inv}}=800\,m$",
+            "filename": h1_prcntg_S800_2K,
+            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=2K$",
             "plot_kwargs":{
-                "colorbar_label": dhl
+                "colorbar_label": h1l,
+                "s": 2.7,
+            }
+        },
+
+        {
+            "filename": dh_prcntg_S800_5K,
+            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=5K$",
+            "plot_kwargs":{
+                "colorbar_label": dhl,
+                "s": 6,
             }
         },
         {
-            "filename": BLH_S800,
-            "name": r"$H_{\textrm{inv}}=800\,m$",
+            "filename": dh_prcntg_S800_2K,
+            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=2K$",
             "plot_kwargs":{
-                "colorbar_label": r"$\Delta H/H_0\,(\%)$"
+                "colorbar_label": dhl,
+                "s": 6,
             }
         },
+
+        # {
+        #     "filename": BLH_S800,
+        #     "name": r"$H_{\textrm{inv}}=800\,m$",
+        #     "plot_kwargs":{
+        #         "colorbar_label": r"$\Delta H/H_0\,(\%)$"
+        #     }
+        # },
         
-        {
-            "filename": h1_prcntg_S250,
-            "name": r"$H_{\textrm{inv}}=250\,m$",
-            "plot_kwargs":{
-                "colorbar_label": h1l
-            }
-        },
-        {
-            "filename": dh_prcntg_S250,
-            "name": r"$H_{\textrm{inv}}=250\,m$",
-            "plot_kwargs":{
-                "colorbar_label": dhl
-            }
-        },
-        {
-            "filename": BLH_S250,
-            "name": r"$H_{\textrm{inv}}=250\,m$",
-            "plot_kwargs":{
-                "colorbar_label": r"$\Delta H/H_0\,(\%)$"
-            }
-        },
+        # {
+        #     "filename": h1_prcntg_S250,
+        #     "name": r"$H_{\textrm{inv}}=250\,m$",
+        #     "plot_kwargs":{
+        #         "colorbar_label": h1l
+        #     }
+        # },
+        # {
+        #     "filename": dh_prcntg_S250,
+        #     "name": r"$H_{\textrm{inv}}=250\,m$",
+        #     "plot_kwargs":{
+        #         "colorbar_label": dhl
+        #     }
+        # },
+        # {
+        #     "filename": BLH_S250,
+        #     "name": r"$H_{\textrm{inv}}=250\,m$",
+        #     "plot_kwargs":{
+        #         "colorbar_label": r"$\Delta H/H_0\,(\%)$"
+        #     }
+        # },
     
     ],
     **plot_style,

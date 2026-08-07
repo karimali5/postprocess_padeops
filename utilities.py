@@ -36,7 +36,6 @@ def _format_tick_max_two_decimals(value, _position=None):
         value = 0.0
     return f"{value:.2f}".rstrip("0").rstrip(".")
 
-
 def _plot_fontsize(kwargs, key, default):
     return kwargs.get(key, kwargs.get("fontsize", kwargs.get("font_size", default)))
 
@@ -919,6 +918,30 @@ def gaussian_filter_slice(slice_data, l_smooth = 3.5):
     smoothed['data'] = d
     return smoothed
 
+def zero_first_vertical_level(slice_data):
+    zeroed = _copy_slice_dict(slice_data)
+    dims = tuple(zeroed.get("dims", ()))
+    vertical_dim = None
+    for candidate in ("z", "z1", "z2", "x3", "height"):
+        if candidate in dims:
+            vertical_dim = dims.index(candidate)
+            break
+
+    if vertical_dim is None:
+        raise ValueError(
+            "Cannot zero the first vertical level because no vertical dimension "
+            f"was found in slice dims {dims}."
+        )
+
+    if vertical_dim == 0:
+        zeroed["data"][0, :] = 0.0
+    elif vertical_dim == 1:
+        zeroed["data"][:, 0] = 0.0
+    else:
+        raise ValueError("This function only supports 2D slices.")
+
+    return zeroed
+
 def _copy_slice_dict(slice_data):
     # Keep caller-owned slice dictionaries immutable from utility operations.
     copied = slice_data.copy()
@@ -1545,12 +1568,17 @@ def _validate_compatible_slices(primary, secondary, operation):
 def _prepare_plot_slice_data(filename, **kwargs):
     fieldgain = kwargs.get('fieldgain', 1)
     lengthgain = kwargs.get('lengthgain', 1)
+    scale = kwargs.get('scale', 1)
     background = kwargs.get('background', None)
     percentage = kwargs.get('percentage', False)
     smooth = kwargs.get('smooth', False)
     l_smooth = kwargs.get('l_smooth', 5)
+    zero_ground_first_row = kwargs.get(
+        "zero_ground_first_row",
+        kwargs.get("zero_first_vertical_level", False),
+    )
 
-    d = read_netcdf_slice(filename)
+    d = read_netcdf_slice(filename, scale=scale)
     d["data"] *= fieldgain
 
     if background is not None:
@@ -1567,6 +1595,9 @@ def _prepare_plot_slice_data(filename, **kwargs):
 
     if smooth:
         d = gaussian_filter_slice(d, l_smooth = l_smooth)
+
+    if zero_ground_first_row:
+        d = zero_first_vertical_level(d)
 
     return d
 
@@ -1632,7 +1663,7 @@ def _format_simulation_label(index, name, annotation):
 
 def _simulation_plot_kwargs(global_kwargs, sim):
     panel_kwargs = global_kwargs.copy()
-    for key in ("fieldgain", "s"):
+    for key in ("fieldgain", "scale", "s", "zero_ground_first_row", "zero_first_vertical_level"):
         if key in sim:
             panel_kwargs[key] = sim[key]
     panel_kwargs.update(sim.get("plot_kwargs", {}))
@@ -1675,6 +1706,7 @@ def _plot_slice_on_axis(ax, d, cmap, norm, plot_levels, simulation_label=None, *
     streamtube = kwargs.get('streamtube', None)
     station = kwargs.get('station', None)
     transform_axes_data = kwargs.get('transform_axes_data', False)
+    hide_top_right_spines = kwargs.get('hide_top_right_spines', False)
 
     def _get_transform(axis_name, transformer):
         if transformer is None:
@@ -1888,6 +1920,10 @@ def _plot_slice_on_axis(ax, d, cmap, norm, plot_levels, simulation_label=None, *
     _apply_axis_transformer("x", xaxis_transformer)
     _apply_axis_transformer("y", yaxis_transformer)
     ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+    if hide_top_right_spines:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(top=False, right=False)
 
     return cf
 
@@ -1991,6 +2027,144 @@ def _add_local_slice_colorbars(fig, axes, cfs, color_specs, local_kwargs_list=No
         cbar.update_ticks()
         cbar.ax.tick_params(labelsize=tick_fontsize)
 
+def _colorbar_group_indices(group, group_index, panel_count):
+    if isinstance(group, dict):
+        indices = group.get("indices", group.get("panels", None))
+    else:
+        indices = group
+
+    if indices is None:
+        raise KeyError(f"Colorbar group {group_index} is missing 'indices'.")
+
+    if isinstance(indices, range):
+        indices = list(indices)
+    elif isinstance(indices, slice):
+        indices = list(range(panel_count))[indices]
+    else:
+        indices = list(indices)
+
+    if not indices:
+        raise ValueError(f"Colorbar group {group_index} has no panel indices.")
+
+    invalid = [index for index in indices if index < 0 or index >= panel_count]
+    if invalid:
+        raise IndexError(
+            f"Colorbar group {group_index} contains invalid panel indices {invalid}; "
+            f"valid range is 0 to {panel_count - 1}."
+        )
+
+    return indices
+
+def _add_grouped_slice_colorbars(fig, axes, cfs, color_specs, groups, ncols, **kwargs):
+    colorbar_orient = kwargs.get('colorbar_orient', 'vertical')
+
+    deficit = kwargs.get('deficit', True)
+    fixed_colorbar_ticks = kwargs.get('fixed_colorbar_ticks', False)
+    colorbar_tick_count = kwargs.get('colorbar_tick_count', 9)
+    colorbar_label = kwargs.get('colorbar_label', None)
+    tick_fontsize = kwargs.get(
+        'colorbar_tick_fontsize',
+        _plot_fontsize(kwargs, 'tick_fontsize', 6),
+    )
+    label_fontsize = _plot_fontsize(kwargs, 'colorbar_label_fontsize', 8)
+    default_height = kwargs.get('group_colorbar_height', kwargs.get('colorbar_height', 0.032))
+    default_width_fraction = kwargs.get('group_colorbar_width_fraction', 0.46)
+    default_location = kwargs.get(
+        'group_colorbar_location',
+        'right' if colorbar_orient == 'vertical' else 'bottom',
+    )
+    default_width = kwargs.get('group_colorbar_width', kwargs.get('colorbar_width', 0.012))
+    default_pad = kwargs.get('group_colorbar_pad', kwargs.get('colorbar_pad', 0.012))
+
+    axes_positions = [ax.get_position() for ax in axes]
+
+    for group_index, group in enumerate(groups):
+        group_kwargs = group if isinstance(group, dict) else {}
+        indices = _colorbar_group_indices(group, group_index, len(axes))
+        location = group_kwargs.get('location', default_location)
+        height = group_kwargs.get('height', default_height)
+        width_fraction = group_kwargs.get('width_fraction', default_width_fraction)
+
+        positions = [axes_positions[index] for index in indices]
+        left = min(pos.x0 for pos in positions)
+        right = max(pos.x1 for pos in positions)
+
+        if 'rect' in group_kwargs:
+            rect = group_kwargs['rect']
+        elif colorbar_orient == 'vertical':
+            width = group_kwargs.get('width', default_width)
+            pad = group_kwargs.get('pad', default_pad)
+            height_fraction = group_kwargs.get('height_fraction', 1.0)
+            bottom = min(pos.y0 for pos in positions)
+            top = max(pos.y1 for pos in positions)
+            full_height = top - bottom
+            height = full_height * height_fraction
+            y0 = bottom + (full_height - height) / 2
+            if location != 'right':
+                raise ValueError("Vertical grouped colorbars support location='right' or explicit 'rect'.")
+            rect = [right + pad, y0, width, height]
+        elif location == 'between':
+            width = (right - left) * width_fraction
+            x0 = left + ((right - left) - width) / 2
+            rows = sorted({index // ncols for index in indices})
+            lower_row = max(rows) + 1
+            lower_positions = [
+                axes_positions[index]
+                for index in range(len(axes))
+                if index // ncols == lower_row
+            ]
+            if not lower_positions:
+                raise ValueError(
+                    f"Colorbar group {group_index} uses location='between' but no lower row exists."
+                )
+            group_bottom = min(pos.y0 for pos in positions)
+            lower_top = max(pos.y1 for pos in lower_positions)
+            y0 = lower_top + (group_bottom - lower_top - height) / 2
+            rect = [x0, y0, width, height]
+        elif location == 'bottom':
+            width = (right - left) * width_fraction
+            x0 = left + ((right - left) - width) / 2
+            y0 = group_kwargs.get('y0', 0.065)
+            rect = [x0, y0, width, height]
+        else:
+            raise ValueError("Grouped colorbar location must be 'bottom', 'between', 'right', or use 'rect'.")
+
+        y_shift = group_kwargs.get('y_shift', group_kwargs.get('y_offset', 0.0))
+        x_shift = group_kwargs.get('x_shift', group_kwargs.get('x_offset', 0.0))
+        if y_shift or x_shift:
+            rect = [rect[0] + x_shift, rect[1] + y_shift, rect[2], rect[3]]
+
+        cf = cfs[indices[-1]]
+        scale = color_specs[indices[-1]][3]
+        cax = fig.add_axes(rect)
+        cbar = fig.colorbar(cf, cax=cax, orientation=colorbar_orient)
+        label = group_kwargs.get('label', colorbar_label)
+        if label is not None:
+            if colorbar_orient == 'vertical':
+                label_x = group_kwargs.get('label_x', kwargs.get('colorbar_label_x', 0.5))
+                label_y = group_kwargs.get('label_y', kwargs.get('colorbar_label_y', 1.03))
+                cbar.ax.text(
+                    label_x, label_y, label,
+                    transform=cbar.ax.transAxes,
+                    va="bottom", ha="center", fontsize=label_fontsize,
+                    rotation=0,
+                    clip_on=False,
+                )
+            else:
+                cbar.ax.text(
+                    1.07, 0.5, label,
+                    transform=cbar.ax.transAxes,
+                    va="center", ha="left", fontsize=label_fontsize,
+                )
+
+        if deficit and fixed_colorbar_ticks and scale is not None:
+            ticks = np.linspace(-scale, scale, colorbar_tick_count)
+            cbar.set_ticks(ticks)
+
+        cbar.formatter = FuncFormatter(_format_tick_max_two_decimals)
+        cbar.update_ticks()
+        cbar.ax.tick_params(labelsize=tick_fontsize)
+
 def _adjust_slice_layout(fig, **kwargs):
     colorbar_orient = kwargs.get('colorbar_orient', 'vertical')
     hspace = kwargs.get('hspace', 0.18)
@@ -2068,6 +2242,7 @@ def plot_slices(simulations, **kwargs):
     annotation = kwargs.get('annotation', 'letter_name')
     figure_stamp = kwargs.get('stamp', None)
     local_colorbars = kwargs.get('local_colorbars', False)
+    colorbar_groups = kwargs.get('colorbar_groups', None)
     stamp_fontsize = _plot_fontsize(kwargs, 'stamp_fontsize', 6)
     stamp_location = kwargs.get('stamp_location', (0.98, 0.985))
     stamp_ha = kwargs.get('stamp_ha', 'right')
@@ -2094,7 +2269,31 @@ def plot_slices(simulations, **kwargs):
         prepared.append(_prepare_plot_slice_data(sim["filename"], **panel_kwargs))
 
     use_local_colorbars = local_colorbars
-    if use_local_colorbars:
+    if colorbar_groups is not None and use_local_colorbars:
+        raise ValueError("Use either colorbar_groups or local_colorbars, not both.")
+
+    if colorbar_groups is not None:
+        color_specs = [None] * len(prepared)
+        for group_index, group in enumerate(colorbar_groups):
+            indices = _colorbar_group_indices(group, group_index, len(prepared))
+            group_slices = [prepared[index] for index in indices]
+            group_kwargs = kwargs.copy()
+            if isinstance(group, dict):
+                group_kwargs.update(group.get("plot_kwargs", {}))
+                for key in ("fieldgain", "scale", "s", "vmin", "vmax", "levels", "deficit"):
+                    if key in group:
+                        group_kwargs[key] = group[key]
+            group_color_spec = _make_shared_norm_and_levels(group_slices, **group_kwargs)
+            for index in indices:
+                color_specs[index] = group_color_spec
+
+        missing_indices = [index for index, spec in enumerate(color_specs) if spec is None]
+        if missing_indices:
+            raise ValueError(
+                "colorbar_groups must include every simulation panel. "
+                f"Missing panel indices: {missing_indices}."
+            )
+    elif use_local_colorbars:
         color_specs = [
             _make_shared_norm_and_levels(
                 [d],
@@ -2123,6 +2322,9 @@ def plot_slices(simulations, **kwargs):
         if ax_index // ncols < nrows - 1:
             ax.set_xlabel(None)
             ax.tick_params(axis='x', labelbottom=False)
+        if ax_index % ncols != 0:
+            ax.set_ylabel(None)
+            ax.tick_params(axis='y', labelleft=False)
 
     # Remove unused axes when the simulation count is odd.
     used_indices = set(panel_indices)
@@ -2131,7 +2333,7 @@ def plot_slices(simulations, **kwargs):
             continue
         fig.delaxes(ax)
 
-    if not use_local_colorbars:
+    if colorbar_groups is None and not use_local_colorbars:
         _add_slice_colorbar(
             fig,
             panel_axes,
@@ -2149,7 +2351,19 @@ def plot_slices(simulations, **kwargs):
     layout_kwargs["_has_figure_title"] = figure_stamp is not None
     if use_local_colorbars and kwargs.get('colorbar_orient', 'vertical') == 'horizontal':
         layout_kwargs["hspace"] = max(layout_kwargs.get("hspace", 0.18), 0.62)
+    if colorbar_groups is not None and kwargs.get('colorbar_orient', 'vertical') == 'horizontal':
+        layout_kwargs["hspace"] = max(layout_kwargs.get("hspace", 0.18), 0.50)
     _adjust_slice_layout(fig, **layout_kwargs)
+    if colorbar_groups is not None:
+        _add_grouped_slice_colorbars(
+            fig,
+            panel_axes,
+            cfs,
+            color_specs,
+            colorbar_groups,
+            ncols,
+            **kwargs,
+        )
     if use_local_colorbars:
         _add_local_slice_colorbars(
             fig,
