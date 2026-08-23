@@ -104,6 +104,24 @@ def _transform_scalar(value, transform):
         return value
     return float(np.asarray(transform(np.asarray(value))))
 
+def _apply_profile_offset(x, y, offset_x):
+    if offset_x is None or offset_x == 0:
+        return y
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    sort_order = np.argsort(x)
+    x_sorted = x[sort_order]
+    y_sorted = y[sort_order]
+
+    if offset_x < x_sorted[0] or offset_x > x_sorted[-1]:
+        raise ValueError(
+            f"Profile offset x-coordinate {offset_x} is outside the profile "
+            f"x-range [{x_sorted[0]}, {x_sorted[-1]}]."
+        )
+
+    return y - np.interp(offset_x, x_sorted, y_sorted)
+
 def _apply_axis_transformer(ax, axis_name, transformer, transform_axes_data, label_fontsize):
     if transformer is None:
         return
@@ -189,10 +207,10 @@ def plot_profiles(profiles, **kwargs):
     tight_layout = kwargs.get('tight_layout', True)
     close = kwargs.get('close', False)
     hide_top_right_spines = kwargs.get('hide_top_right_spines', False)
-    tick_fontsize = kwargs.get('tick_fontsize', 7)
-    label_fontsize = kwargs.get('label_fontsize', 9)
-    title_fontsize = kwargs.get('title_fontsize', 10)
-    legend_fontsize = kwargs.get('legend_fontsize', 9)
+    tick_fontsize = kwargs.get('tick_fontsize', 10)
+    label_fontsize = kwargs.get('label_fontsize', 11)
+    title_fontsize = kwargs.get('title_fontsize', 9)
+    legend_fontsize = kwargs.get('legend_fontsize', 10)
     linewidth = kwargs.get('linewidth', 1.2)
     linestyle = kwargs.get('linestyle', '-')
     marker = kwargs.get('marker', None)
@@ -212,6 +230,7 @@ def plot_profiles(profiles, **kwargs):
             x,y = load_profile(profile['file'])
             profile_ygain = profile.get('ygain', profile.get('yscale_factor', ygain))
             y = np.asarray(y) * profile_ygain
+            y = _apply_profile_offset(x, y, profile.get('offset', None))
             ax.plot(
                 _transform_values(x, x_transform),
                 _transform_values(y, y_transform),
@@ -298,6 +317,12 @@ def plot_profiles(profiles, **kwargs):
         return fig, ax
 
 def plot_profile_panels(profile_panels, **kwargs):
+    """
+    Plot stacked profile panels.
+
+    Each panel dictionary can override the global y-axis limits with
+    ``ylim``, ``ybot``/``ymin``, or ``ytop``/``ymax``.
+    """
     export = kwargs.get('export', None)
     xlabel = kwargs.get('xlabel', None)
     ylabel = kwargs.get('ylabel', None)
@@ -331,6 +356,7 @@ def plot_profile_panels(profile_panels, **kwargs):
     tick_fontsize = kwargs.get('tick_fontsize', 7)
     label_fontsize = kwargs.get('label_fontsize', 9)
     title_fontsize = kwargs.get('title_fontsize', 10)
+    title_loc = kwargs.get('title_loc', 'left')
     legend_fontsize = kwargs.get('legend_fontsize', 9)
     linewidth = kwargs.get('linewidth', 1.2)
     linestyle = kwargs.get('linestyle', '-')
@@ -358,11 +384,18 @@ def plot_profile_panels(profile_panels, **kwargs):
             panel_profiles = panel.get("profiles", panel) if isinstance(panel, dict) else panel
             panel_ylabel = panel.get("ylabel", ylabel) if isinstance(panel, dict) else ylabel
             panel_title = panel.get("title", None) if isinstance(panel, dict) else None
+            #panel_label = panel.get("panel_label", f"({chr(ord('a') + panel_index)})") if isinstance(panel, dict) else f"({chr(ord('a') + panel_index)})"
+            panel_label=None
+            panel_ylim = panel.get("ylim", ylim) if isinstance(panel, dict) else ylim
+            panel_ybot = panel.get("ybot", panel.get("ymin", ybot)) if isinstance(panel, dict) else ybot
+            panel_ytop = panel.get("ytop", panel.get("ymax", ytop)) if isinstance(panel, dict) else ytop
+            panel_legend_ncols = panel.get("legend_ncols", legend_ncols) if isinstance(panel, dict) else legend_ncols
 
             for profile in panel_profiles:
                 x, y = load_profile(profile['file'])
                 profile_ygain = profile.get('ygain', profile.get('yscale_factor', ygain))
                 y = np.asarray(y) * profile_ygain
+                y = _apply_profile_offset(x, y, profile.get('offset', None))
                 ax.plot(
                     _transform_values(x, x_transform),
                     _transform_values(y, y_transform),
@@ -400,21 +433,22 @@ def plot_profile_panels(profile_panels, **kwargs):
                 ax.set_yscale(yscale)
             if xlim is not None:
                 ax.set_xlim((_transform_scalar(xlim[0], x_transform), _transform_scalar(xlim[1], x_transform)))
-            if ylim is not None:
-                ax.set_ylim((_transform_scalar(ylim[0], y_transform), _transform_scalar(ylim[1], y_transform)))
+            if panel_ylim is not None:
+                ax.set_ylim((_transform_scalar(panel_ylim[0], y_transform), _transform_scalar(panel_ylim[1], y_transform)))
             if xlft is not None:
                 ax.set_xlim(left=_transform_scalar(xlft, x_transform))
             if xrght is not None:
                 ax.set_xlim(right=_transform_scalar(xrght, x_transform))
-            if ybot is not None:
-                ax.set_ylim(bottom=_transform_scalar(ybot, y_transform))
-            if ytop is not None:
-                ax.set_ylim(top=_transform_scalar(ytop, y_transform))
+            if panel_ybot is not None:
+                ax.set_ylim(bottom=_transform_scalar(panel_ybot, y_transform))
+            if panel_ytop is not None:
+                ax.set_ylim(top=_transform_scalar(panel_ytop, y_transform))
 
             if panel_ylabel is not None:
                 ax.set_ylabel(panel_ylabel, fontsize=label_fontsize)
-            if panel_title is not None:
-                ax.set_title(panel_title, fontsize=title_fontsize)
+            if panel_label is not None or panel_title is not None:
+                title_parts = [part for part in (panel_label, panel_title) if part]
+                ax.set_title(" ".join(title_parts), fontsize=title_fontsize, loc=title_loc)
 
             _apply_axis_transformer(ax, "y", yaxis_transformer, transform_axes_data, label_fontsize)
             ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
@@ -434,7 +468,7 @@ def plot_profile_panels(profile_panels, **kwargs):
             if legend:
                 ax.legend(
                     loc=legend_loc,
-                    ncol=legend_ncols,
+                    ncol=panel_legend_ncols,
                     frameon=legend_frameon,
                     fontsize=legend_fontsize,
                     **legend_kwargs,
@@ -452,124 +486,86 @@ def plot_profile_panels(profile_panels, **kwargs):
         return fig, axes
 
 profiles = [
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term07_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\overline{u}^b \partial_x \Delta{\overline{u}}$',
-        'color': 'k',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
 
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term08_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\overline{v}^b \partial_y \Delta{\overline{u}}$',
-        'color': 'k',
-        'style': '--',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term09_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\overline{w}^b \partial_z \Delta{\overline{u}}$',
-        'color': 'k',
-        'style': 'dotted',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term01_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\Delta \overline{u} \partial_x \Delta{\overline{u}}$',
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_tkeadvect_rms_x.csv",
+        'label': r'$\Delta \mathcal{A}$',
         'color': 'tab:red',
         'style': '-',
-        'ygain': rmsgain*1000,
+        'ygain': rmsgain*100000,
         "linewidth": lw,
+        #'offset': 140,
     },
 
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term02_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\Delta \overline{v} \partial_y \Delta{\overline{u}}$',
-        'color': 'tab:red',
-        'style': '--',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
+    #######
 
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term03_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\Delta \overline{w} \partial_z \Delta{\overline{u}}$',
-        'color': 'tab:red',
-        'style': 'dotted',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term16_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\partial_x \overline{\Delta u^\prime \Delta u^\prime}$',
-        'color': 'tab:orange',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term17_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\partial_y \overline{\Delta u^\prime \Delta v^\prime}$',
-        'color': 'tab:orange',
-        'style': '--',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term18_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\partial_z \overline{\Delta u^\prime \Delta w^\prime}$',
-        'color': 'tab:orange',
-        'style': 'dotted',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        #'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(16+19+22+17+20+23+18+21+24)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/rms_delta_Reynolds_delta_rms_x.csv",
-        'label': r'$\Delta \partial_j \overline{u^\prime u^\prime_j}$',
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_PrsRedist_rms_x.csv",
+        'label': r'$\Delta \mathcal{R}$',
         'color': 'tab:brown',
         'style': '-',
-        'ygain': rmsgain*1000,
+        'ygain': rmsgain*100000,
         "linewidth": lw,
+        #'offset': 140,
     },
 
-    # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(16+19)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-    #     'label': r'$\Delta \partial_x \overline{ u^\prime u^\prime}$',
-    #     'color': 'tab:orange',
-    #     'style': '-',
-    #     'ygain': rmsgain*1000,
-    #     "linewidth": lw,
-    # },
+    #######
 
-    # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(17+20+23)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-    #     'label': r'$\Delta \partial_y \overline{ u^\prime v^\prime}$',
-    #     'color': 'tab:orange',
-    #     'style': '--',
-    #     'ygain': rmsgain*1000,
-    #     "linewidth": lw,
-    # },
+    {
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_Prod_rms_x.csv",
+        'label': r'$\Delta \mathcal{P}$',
+        'color': 'k',
+        'style': '-',
+        'ygain': rmsgain*100000,
+        "linewidth": lw,
+        #'offset': 140,
+    },
 
-    # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(18+21+24)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-    #     'label': r'$\Delta \partial_z \overline{ u^\prime w^\prime}$',
-    #     'color': 'tab:orange',
-    #     'style': 'dotted',
-    #     'ygain': rmsgain*1000,
-    #     "linewidth": lw,
-    # },
+     #######
+    
+    {
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_Bouyancy_rms_x.csv",
+        'label': r'$\Delta \mathcal{B}$',
+        'color': 'cyan',
+        'style': '-',
+        'ygain': rmsgain*100000,
+        "linewidth": lw,
+        #'offset': 140,
+    },
+
+    ####
+    {
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_SGSTransport_rms_x.csv",
+        'label': r'$\Delta \mathcal{D}$',
+        'color': 'tab:orange',
+        'style': '-',
+        'ygain': rmsgain*100000,
+        "linewidth": lw,
+        #'offset': 120,
+    },
+
+    ####
+    {
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_Transport_rms_x.csv",
+        'label': r'$\Delta \mathcal{T}$',
+        'color': 'tab:green',
+        'style': '-',
+        'ygain': rmsgain*100000,
+        "linewidth": lw,
+        'offset': 120,
+    },
+
+    ####
+
+    {
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Net_Dissipation_rms_x.csv",
+        'label': r'$\Delta \varepsilon$',
+        'color': 'tab:blue',
+        'style': '-',
+        'ygain': rmsgain*100000,
+        "linewidth": lw,
+        #'offset': 120,
+    },
 
 ]
 
@@ -578,7 +574,7 @@ axis_style = {
     "xlft": -0.5*Lfarm + xfarm,
     "xrght": 3.*Lfarm + xfarm,
     "xlabel": r"$x$",
-    "ylabel": r"$\mathrm{RMS}~(\times 10^{-3})$",
+    "ylabel": r"$\mathrm{RMS}~(\times 10^{-5})$",
     "xaxis_transformer": {
         "function": lambda x: (x - xfarm) / Lfarm,
         "inverse": lambda xt: xt * Lfarm + xfarm,
@@ -586,6 +582,7 @@ axis_style = {
         "label": r"$(x-x_0)/L_p$",
     },
     "transform_axes_data": False,
+    "ytop": 6,
     "ybot": 0,
 }
 
@@ -596,22 +593,21 @@ overlay_style = {
 }
 
 plot_style = {
-    "figsize": (5, 5),
+    "figsize": (5, 2.7),
     "dpi": 200,
     "hide_top_right_spines": True,
     "legend": True,
+    "legend_loc": "best",
     "legend_frameon": False,
     "tight_layout": True,
-    "legend_fontsize": 7,
-    "hspace": 0.12,
-    "export": "xRMS-components.png",
+    "legend_fontsize": 8,
+    "hspace": 0.3,
+    "export": "nettke.png",
 }
 
 if __name__ == "__main__":
     profile_panels = [
-        {"profiles": profiles[0:3]},
-        {"profiles": profiles[3:6]},
-        {"profiles": profiles[6:10]},
+        {"profiles": profiles[:], "ytop":8, "title":"", "ylabel": r"$\mathrm{RMS}~(\times 10^{-5})$"},
     ]
     plot_profile_panels(
         profile_panels,

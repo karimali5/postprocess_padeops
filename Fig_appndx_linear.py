@@ -7,7 +7,7 @@ xfarm = 160
 Lfarm = 40
 Ly =  158.7301587
 Lz =  63.49206349
-rmsgain = np.sqrt(1/(Ly*Lz))
+rmsgain = (1/(Ly*Lz))
 lw = 1.
 
 def load_profile(file_path):
@@ -103,6 +103,24 @@ def _transform_scalar(value, transform):
     if value is None or transform is None:
         return value
     return float(np.asarray(transform(np.asarray(value))))
+
+def _apply_profile_offset(x, y, offset_x):
+    if offset_x is None or offset_x == 0:
+        return y
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    sort_order = np.argsort(x)
+    x_sorted = x[sort_order]
+    y_sorted = y[sort_order]
+
+    if offset_x < x_sorted[0] or offset_x > x_sorted[-1]:
+        raise ValueError(
+            f"Profile offset x-coordinate {offset_x} is outside the profile "
+            f"x-range [{x_sorted[0]}, {x_sorted[-1]}]."
+        )
+
+    return y - np.interp(offset_x, x_sorted, y_sorted)
 
 def _apply_axis_transformer(ax, axis_name, transformer, transform_axes_data, label_fontsize):
     if transformer is None:
@@ -212,6 +230,7 @@ def plot_profiles(profiles, **kwargs):
             x,y = load_profile(profile['file'])
             profile_ygain = profile.get('ygain', profile.get('yscale_factor', ygain))
             y = np.asarray(y) * profile_ygain
+            y = _apply_profile_offset(x, y, profile.get('offset', None))
             ax.plot(
                 _transform_values(x, x_transform),
                 _transform_values(y, y_transform),
@@ -290,7 +309,7 @@ def plot_profiles(profiles, **kwargs):
         if tight_layout:
             plt.tight_layout()
         if export is None:
-            export = "streamwise_profiles.png"
+            export = "streamwise_linear_profiles.png"
         print(export)
         fig.savefig(export, dpi=dpi, bbox_inches=kwargs.get('bbox_inches', None), pad_inches=kwargs.get('pad_inches', 0.1))
         if close:
@@ -299,90 +318,79 @@ def plot_profiles(profiles, **kwargs):
 
 profiles = [
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(07+08+09)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\overline{u}^b_j \partial_j \Delta{\overline{u}}$',
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/base_adv_u_only_avg_x.csv",
+        'label': r'$\overline{u}^b \partial_x \Delta{\overline{u}}$',
         'color': 'k',
         'style': '-',
-        'ygain': rmsgain*1000,
+        'ygain': rmsgain,
         "linewidth": lw,
     },
     
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(04+05+06)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\Delta \overline{u}_j \partial_j {\overline{u}^b}$',
+        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/tilt_adv_u_only_avg_x.csv",
+        'label': r'$\Delta \overline{w} \partial_z {\overline{u}^b}$',
         'color': 'tab:green',
         'style': '-',
-        'ygain': rmsgain*1000,
+        'ygain': rmsgain,
         "linewidth": lw,
     },
 
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(01+02+03)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\Delta \overline{u}_j \partial_j \Delta{\overline{u}}$',
-        'color': 'tab:red',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-
-    {
-        'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget0_term18_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv',
-        'label': r'$\partial_x \Delta \overline{p}$',
-        'color': 'tab:blue',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(16+17+18)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\partial_j \overline{\Delta u^\prime \Delta u_j^\prime}$',
-        'color': 'tab:orange',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-
-    {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term(19+20+21+22+23+24)_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv",
-        'label': r'$\partial_j \overline{\Delta u^\prime  {u_j^\prime}^b} +\partial_j \overline{ {u^\prime}^b  \Delta {u_j^\prime}}$',
-        'color': 'purple',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
-
-    # {'file':[
-    #     '/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term22_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv',
-    #     '/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term23_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv',
-    #     '/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget5_term24_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv'
-    # ],
-    #     'label': r'$-\partial_j \overline{ {u^\prime}^b  \Delta {u_j^\prime}}$',
-    #     'color': 'purple',
-    #     'style': '--',
-    #     'ygain': -1*rmsgain*1000,
+    # {
+    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/nonlin_adv_u_avg_x.csv",
+    #     'label': r'$\Delta \overline{u}_j \partial_j \Delta{\overline{u}}$',
+    #     'color': 'tab:red',
+    #     'style': '-',
+    #     'ygain': rmsgain,
     #     "linewidth": lw,
     # },
 
-    {
-        'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget0_term12_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv',
-        'label': r'$\partial_j \Delta \overline{\tau}_{1j}$',
-        'color': 'tab:cyan',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
 
-    {
-        'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Run09_comp_deficit_budget0_term15_t101691_n019053_rms_x_y23p8-134p93_zmin0p12.csv',
-        'label': r'${2}{\mathrm{Ro}}^{-1} \sin{\phi} \,\Delta{\overline{v}}$',
-        'color': 'tab:brown',
-        'style': '-',
-        'ygain': rmsgain*1000,
-        "linewidth": lw,
-    },
+    # {
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/ddx_dp_avg_x.csv',
+    #     'label': r'$\partial_x \Delta \overline{p}$',
+    #     'color': 'tab:blue',
+    #     'style': '-',
+    #     'ygain': rmsgain,
+    #     "linewidth": lw,
+    #     # 'offset': 140,
+    # },
+
+    # {
+    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Reynolds_DD_u_avg_x.csv",
+    #     'label': r'$\partial_j \overline{\Delta u^\prime \Delta u_j^\prime}$',
+    #     'color': 'tab:orange',
+    #     'style': '-',
+    #     'ygain': rmsgain,
+    #     "linewidth": lw,
+    # },
+
+
+    # {
+    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Reynolds_rest_u_avg_x.csv",
+    #     'label': r'$\partial_j \overline{\Delta u^\prime  {u_j^\prime}^b} +\partial_j \overline{ {u^\prime}^b  \Delta {u_j^\prime}}$',
+    #     'color': 'purple',
+    #     'style': '-',
+    #     'ygain': rmsgain,
+    #     "linewidth": lw,
+    # },
+
+    # {
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/SGS_du_avg_x.csv',
+    #     'label': r'$\partial_j \Delta \overline{\tau}_{1j}$',
+    #     'color': 'tab:cyan',
+    #     'style': '-',
+    #     'ygain': rmsgain,
+    #     "linewidth": lw,
+    # },
+
+    # {
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/COR_du_avg_x.csv',
+    #     'label': r'${2}{\mathrm{Ro}}^{-1} \sin{\phi} \,\Delta{\overline{v}}$',
+    #     'color': 'tab:brown',
+    #     'style': '-',
+    #     'ygain': rmsgain,
+    #     "linewidth": lw,
+    # },
 
 ]
 
@@ -392,7 +400,7 @@ axis_style = {
     "xlft": -0.5*Lfarm + xfarm,
     "xrght": 3.*Lfarm + xfarm,
     "xlabel": r"$x$",
-    "ylabel": r"$\mathrm{RMS}~(\times 10^{-3})$",
+    "ylabel": r"$y$-$z$ mean",
     "xaxis_transformer": {
         "function": lambda x: (x - xfarm) / Lfarm,
         "inverse": lambda xt: xt * Lfarm + xfarm,
@@ -400,7 +408,7 @@ axis_style = {
         "label": r"$(x-x_0)/L_p$",
     },
     "transform_axes_data": False,
-    "ybot": 0,
+    #"ybot": 0,
 }
 
 overlay_style = {

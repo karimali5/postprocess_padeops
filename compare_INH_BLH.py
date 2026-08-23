@@ -12,6 +12,8 @@ hubheight = 95/126
 
 S800_2K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV800-2K/slices", "timestamp": "101643", "nstamp": "019053"}
 S800_5K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/slices", "timestamp": "101691", "nstamp": "019053"}
+S250_2K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV250-2K/slices", "timestamp": "102084", "nstamp": "019189"}
+S250_5K = {"path": "/anvil/scratch/x-kali/PadeOpsSims/INV250-5K/slices", "timestamp": "102424", "nstamp": "019424"}
 
 S250 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n014397", "timestamp": "092897", "nstamp": "014397"}
 
@@ -20,10 +22,15 @@ S250 = {"path": "/anvil/scratch/x-kali/PadeOpsSims/EXT-BLH250/slices_t092897_n01
 # h1_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
 # dh_prcntg_S250, _ = inversion_height(S250, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
 
-h1_prcntg_S800_2K, h1l = inversion_height(S800_2K, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
-dh_prcntg_S800_2K, dhl = inversion_height(S800_2K, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
-h1_prcntg_S800_5K, h1l = inversion_height(S800_5K, RID=9, BRID=8, mode='h1', deficit=True, percentage=True, smooth=True, l_smooth=5)
-dh_prcntg_S800_5K, dhl = inversion_height(S800_5K, RID=9, BRID=8, mode='dh', deficit=True, percentage=True, smooth=True, l_smooth=5)
+h1_prcntg_S800_2K, h1l = inversion_height(S800_2K, RID=9, BRID=8, mode='h1', deficit=True, percentage=False, smooth=True, l_smooth=5)
+dh_prcntg_S800_2K, dhl = inversion_height(S800_2K, RID=9, BRID=8, mode='dh', deficit=True, percentage=False, smooth=True, l_smooth=5)
+h1_prcntg_S800_5K, h1l = inversion_height(S800_5K, RID=9, BRID=8, mode='h1', deficit=True, percentage=False, smooth=True, l_smooth=5)
+dh_prcntg_S800_5K, dhl = inversion_height(S800_5K, RID=9, BRID=8, mode='dh', deficit=True, percentage=False, smooth=True, l_smooth=5)
+
+h1_prcntg_S250_2K, h1l = inversion_height(S250_2K, RID=9, BRID=8, mode='h1', deficit=True, percentage=False, smooth=True, l_smooth=5)
+dh_prcntg_S250_2K, dhl = inversion_height(S250_2K, RID=9, BRID=8, mode='dh', deficit=True, percentage=False, smooth=True, l_smooth=5)
+h1_prcntg_S250_5K, h1l = inversion_height(S250_5K, RID=9, BRID=8, mode='h1', deficit=True, percentage=False, smooth=True, l_smooth=5)
+dh_prcntg_S250_5K, dhl = inversion_height(S250_5K, RID=9, BRID=8, mode='dh', deficit=True, percentage=False, smooth=True, l_smooth=5)
 
 def blh_fractional_change(sim, run=9, base_run=8, scale=1/126, smooth=True, l_smooth=2):
     smooth_kwargs = {"smooth": smooth, "l_smooth": l_smooth}
@@ -43,10 +50,11 @@ def blh_fractional_change(sim, run=9, base_run=8, scale=1/126, smooth=True, l_sm
 # BLH_S250 = blh_fractional_change(S250)
 
 plot_style = {
-    "ncols": 2,
-    "panel_order": "column",
-    "figsize": (10, 2.7),
-    "wspace": 0.3,
+    "ncols": 4,
+    "panel_order": "row",
+    "figsize": (10.8, 2.0),
+    "wspace": 0.16,
+    "hspace": 0.04,
     "annotation": "letter_name",
 }
 
@@ -54,7 +62,7 @@ field_style = {
     "fieldgain": 1,
     "lengthgain": 1.0,
     "deficit": True,
-    "local_colorbars": True,
+    "local_colorbars": False,
     "cmap_reg": "viridis",
     "cmap_def": "PRGn",
     "vmin": None,
@@ -104,14 +112,28 @@ overlay_style = {
 colorbar_style = {
     "colorbar_orient": "vertical",
     "fixed_colorbar_ticks": False,
+    "colorbar_groups": [
+        {
+            "indices": [0, 1, 2, 3],
+            "label": h1l,
+            "width": 0.006,
+            "pad": 0.006,
+        },
+        {
+            "indices": [4, 5, 6, 7],
+            "label": dhl,
+            "width": 0.006,
+            "pad": 0.006,
+        },
+    ],
 }
 
 font_style = {
-    "tick_fontsize": 7,
+    "tick_fontsize": 6,
     "label_fontsize": 7,
-    "colorbar_tick_fontsize": 6,
+    "colorbar_tick_fontsize": 5,
     "colorbar_label_fontsize": 7,
-    "annotation_fontsize": 8,
+    "annotation_fontsize": 7,
     "stamp_fontsize": 9,
     "stamp_location": (0.96, 0.94),
     "stamp_ha": "right",
@@ -122,35 +144,69 @@ plot_slices(
     [
         {
             "filename": h1_prcntg_S800_5K,
-            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=5K$",
+            "name": r"$800\,m,\;5K$",
             "plot_kwargs":{
                 "colorbar_label": h1l,
-                "s": 2.7,
+               # "s": 2.7,
             }
         },
         {
             "filename": h1_prcntg_S800_2K,
-            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=2K$",
+            "name": r"$800\,m,\;2K$",
             "plot_kwargs":{
                 "colorbar_label": h1l,
-                "s": 2.7,
+              #  "s": 2.7,
+            }
+        },
+
+        {
+            "filename": h1_prcntg_S250_5K,
+            "name": r"$250\,m,\;5K$",
+            "plot_kwargs":{
+                "colorbar_label": h1l,
+              #  "s": 2.7,
+            }
+        },
+        {
+            "filename": h1_prcntg_S250_2K,
+            "name": r"$250\,m,\;2K$",
+            "plot_kwargs":{
+                "colorbar_label": h1l,
+              #  "s": 2.7,
             }
         },
 
         {
             "filename": dh_prcntg_S800_5K,
-            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=5K$",
+            "name": r"$800\,m,\;5K$",
             "plot_kwargs":{
                 "colorbar_label": dhl,
-                "s": 6,
+              #  "s": 6,
             }
         },
         {
             "filename": dh_prcntg_S800_2K,
-            "name": r"$H_{\textrm{inv}}=800\,m,\,\Delta \theta=2K$",
+            "name": r"$800\,m,\;2K$",
             "plot_kwargs":{
                 "colorbar_label": dhl,
-                "s": 6,
+              #  "s": 6,
+            }
+        },
+
+        {
+            "filename": dh_prcntg_S250_5K,
+            "name": r"$250\,m,\;5K$",
+            "plot_kwargs":{
+                "colorbar_label": dhl,
+              #  "s": 6,
+            }
+        },
+        {
+            "filename": dh_prcntg_S250_2K,
+            "name": r"$250\,m,\;2K$",
+            "plot_kwargs":{
+                "colorbar_label": dhl,
+               # "s": 6,
             }
         },
 

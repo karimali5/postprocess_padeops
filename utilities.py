@@ -44,6 +44,24 @@ def _add_matched_vertical_colorbar(fig, cf, ax, pad=0.08, size="2%"):
     cax = divider.append_axes("right", size=size, pad=pad)
     return fig.colorbar(cf, cax=cax, orientation="vertical")
 
+def _set_colorbar_ticks(cbar, tick_count, fixed_limits=None):
+    if tick_count is None:
+        return
+
+    tick_count = int(tick_count)
+    if tick_count < 2:
+        raise ValueError("colorbar_tick_count must be at least 2.")
+
+    if fixed_limits is None:
+        lower, upper = cbar.vmin, cbar.vmax
+    else:
+        lower, upper = fixed_limits
+
+    if not np.isfinite(lower) or not np.isfinite(upper):
+        lower, upper = cbar.mappable.get_clim()
+
+    cbar.set_ticks(np.linspace(lower, upper, tick_count))
+
 def _axis_transform_function(transformer):
     if transformer is None:
         return None
@@ -1933,6 +1951,7 @@ def _add_slice_colorbar(fig, axes, cf, scale, **kwargs):
     colorbar_tick_count = kwargs.get('colorbar_tick_count', 9)
     colorbar_orient = kwargs.get('colorbar_orient', 'vertical')
     colorbar_label = kwargs.get('colorbar_label', None)
+    colorbar_label_location = kwargs.get('colorbar_label_location', 'side')
     colorbar_pad = kwargs.get('colorbar_pad', 0.08)
     colorbar_fraction = kwargs.get('colorbar_fraction', 0.025)
     colorbar_size = kwargs.get('colorbar_size', kwargs.get('colorbar_thickness', '2%'))
@@ -1955,7 +1974,13 @@ def _add_slice_colorbar(fig, axes, cf, scale, **kwargs):
             cbar = _add_matched_vertical_colorbar(
                 fig, cf, axes, pad=colorbar_pad, size=colorbar_size
             )
-        if colorbar_label is not None:
+        if colorbar_label is not None and colorbar_label_location == 'bottom':
+            cbar.ax.text(
+                0.5, -0.16, colorbar_label,
+                transform=cbar.ax.transAxes,
+                va="top", ha="center", fontsize=label_fontsize,
+            )
+        elif colorbar_label is not None:
             cbar.set_label(colorbar_label, fontsize=label_fontsize, labelpad=6)
     else:
         cax = fig.add_axes([0.27, 0.065, 0.46, 0.032])
@@ -1967,9 +1992,8 @@ def _add_slice_colorbar(fig, axes, cf, scale, **kwargs):
                 va="center", ha="left", fontsize=label_fontsize,
             )
 
-    if deficit and fixed_colorbar_ticks:
-        ticks = np.linspace(-scale, scale, colorbar_tick_count)
-        cbar.set_ticks(ticks)
+    fixed_limits = (-scale, scale) if deficit and fixed_colorbar_ticks and scale is not None else None
+    _set_colorbar_ticks(cbar, colorbar_tick_count, fixed_limits=fixed_limits)
 
     cbar.formatter = FuncFormatter(_format_tick_max_two_decimals)
     cbar.update_ticks()
@@ -1989,6 +2013,7 @@ def _add_local_slice_colorbars(fig, axes, cfs, color_specs, local_kwargs_list=No
         colorbar_tick_count = cbar_kwargs.get('colorbar_tick_count', 9)
         colorbar_orient = cbar_kwargs.get('colorbar_orient', 'vertical')
         colorbar_label = cbar_kwargs.get('colorbar_label', None)
+        colorbar_label_location = cbar_kwargs.get('colorbar_label_location', 'side')
         colorbar_pad = cbar_kwargs.get('colorbar_pad', 0.03)
         colorbar_size = cbar_kwargs.get(
             'colorbar_size',
@@ -2008,7 +2033,13 @@ def _add_local_slice_colorbars(fig, axes, cfs, color_specs, local_kwargs_list=No
             cbar = _add_matched_vertical_colorbar(
                 fig, cf, ax, pad=colorbar_pad, size=colorbar_size
             )
-            if colorbar_label is not None:
+            if colorbar_label is not None and colorbar_label_location == 'bottom':
+                cbar.ax.text(
+                    0.5, -0.16, colorbar_label,
+                    transform=cbar.ax.transAxes,
+                    va="top", ha="center", fontsize=label_fontsize,
+                )
+            elif colorbar_label is not None:
                 cbar.set_label(colorbar_label, fontsize=label_fontsize, labelpad=6)
         else:
             cbar = fig.colorbar(cf, ax=ax, orientation=colorbar_orient, pad=0.16, fraction=0.08)
@@ -2019,9 +2050,8 @@ def _add_local_slice_colorbars(fig, axes, cfs, color_specs, local_kwargs_list=No
                     va="center", ha="left", fontsize=label_fontsize,
                 )
 
-        if deficit and fixed_colorbar_ticks and scale is not None:
-            ticks = np.linspace(-scale, scale, colorbar_tick_count)
-            cbar.set_ticks(ticks)
+        fixed_limits = (-scale, scale) if deficit and fixed_colorbar_ticks and scale is not None else None
+        _set_colorbar_ticks(cbar, colorbar_tick_count, fixed_limits=fixed_limits)
 
         cbar.formatter = FuncFormatter(_format_tick_max_two_decimals)
         cbar.update_ticks()
@@ -2157,9 +2187,8 @@ def _add_grouped_slice_colorbars(fig, axes, cfs, color_specs, groups, ncols, **k
                     va="center", ha="left", fontsize=label_fontsize,
                 )
 
-        if deficit and fixed_colorbar_ticks and scale is not None:
-            ticks = np.linspace(-scale, scale, colorbar_tick_count)
-            cbar.set_ticks(ticks)
+        fixed_limits = (-scale, scale) if deficit and fixed_colorbar_ticks and scale is not None else None
+        _set_colorbar_ticks(cbar, colorbar_tick_count, fixed_limits=fixed_limits)
 
         cbar.formatter = FuncFormatter(_format_tick_max_two_decimals)
         cbar.update_ticks()

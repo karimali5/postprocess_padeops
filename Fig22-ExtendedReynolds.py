@@ -38,7 +38,7 @@ def blh_files_y(sim, y):
     ]
 
 plot_style = {
-    "figsize": (7.9, 1.85),
+    "figsize": (7.9, 2.4),
     "panel_order": "row",
     "annotation": "letter_name",
     "ncols":3,
@@ -121,7 +121,8 @@ colorbar_style = {
         {"indices": range(0, 3), "location": "right", "s": 0.2, "label": r""},
         {"indices": range(3, 6), "location": "right", "s": 50, "label": r"$\times 10^{-3}$"},
         {"indices": range(6, 9), "location": "right", "s": 7.5, "label": r"$\times 10^{-3}$"},
-        #{"indices": range(9, 12), "location": "right", "s": 3, "label": r"$\times 10^{-3}$"},
+        {"indices": range(9, 12), "location": "right", "s": 4, "label": r"$\times 10^{-3}$"},
+        {"indices": range(12, 15), "location": "right", "s": 4, "label": r"$\times 10^{-3}$"},
     ],
 }
 
@@ -234,38 +235,69 @@ plot_slices(
 
             #------
             
-            # {
-            #     "filename": [
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term19_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term22_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #     ],
-            #     "name": r"$-2 \partial_x \overline{\Delta u^\prime  {u^\prime}^b} $",
-            #     #"blh_file": blh_files_y(S800_5K, yfarm),
-            #     'fieldgain': -1000,
-            #     #'s': 14,
-            # },
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget6_term16_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_x \overline{\Delta v^\prime \Delta u^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
 
-            # {
-            #     "filename": [
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term21_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term23_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #     ],
-            #     "name": r"$-\partial_y \overline{\Delta u^\prime  {v^\prime}^b}  -\partial_y \overline{{u^\prime}^b \Delta v^\prime}  $",
-            #     #"blh_file": blh_files_y(S800_5K, yfarm),
-            #     'fieldgain': -1000,
-            #     #'s': 14,
-            # },
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget6_term17_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_y \overline{\Delta v^\prime \Delta v^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
 
-            # {
-            #     "filename": [
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term22_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #         os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget5_term24_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-            #     ],
-            #     "name": r"$-\partial_z \overline{\Delta u^\prime {w^\prime}^b}  -\partial_z \overline{ {u^\prime}^b \Delta w^\prime} $",
-            #     #"blh_file": blh_files_y(S800_5K, yfarm),
-            #     'fieldgain': -1000,
-            #     #'s': 14,
-            # },
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget6_term18_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_z \overline{\Delta v^\prime \Delta w^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
+
+            #------
+
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget7_term16_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_x \overline{\Delta w^\prime \Delta u^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget7_term17_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_y \overline{\Delta w^\prime \Delta v^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
+
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget7_term18_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$-\partial_z \overline{\Delta w^\prime \Delta w^\prime}  $",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain':   -1000,
+                #'s': 14,
+            },
+
+            #------
     
         ],
         #stamp=rf"$x-x_0={(x-xfarm)/Lfarm:.2f}L_f$",
