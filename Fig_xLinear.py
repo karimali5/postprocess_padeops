@@ -5,9 +5,12 @@ import warnings
 
 xfarm = 160
 Lfarm = 40
+Lx =  761.904761904
 Ly =  158.7301587
 Lz =  63.49206349
-rmsgain = (1/(Ly*Lz))
+zh = 95/126
+lineargain = (1000000000/(Ly*Lz))
+z_lineargain = (1000000000/(Lx*Ly))
 lw = 1.
 
 def load_profile(file_path):
@@ -218,22 +221,36 @@ def plot_profiles(profiles, **kwargs):
     color = kwargs.get('color', None)
     zorder = kwargs.get('zorder', None)
     ygain = kwargs.get('ygain', kwargs.get('yscale_factor', 1.0))
+    profile_axis = kwargs.get('profile_axis', 'x')
+    ax = kwargs.get('ax', None)
+
+    if profile_axis not in ('x', 'y'):
+        raise ValueError("profile_axis must be 'x' or 'y'.")
 
     x_transform = _axis_transform_function("x", xaxis_transformer) if transform_axes_data else None
     y_transform = _axis_transform_function("y", yaxis_transformer) if transform_axes_data else None
 
     with plt.rc_context({"text.usetex": True, "font.family": "serif"}):
-        fig = plt.figure(figsize=figsize)
-        ax = plt.axes()
+        if ax is None:
+            fig = plt.figure(figsize=figsize)
+            ax = plt.axes()
+        else:
+            fig = ax.figure
 
         for profile in profiles:
             x,y = load_profile(profile['file'])
             profile_ygain = profile.get('ygain', profile.get('yscale_factor', ygain))
             y = np.asarray(y) * profile_ygain
             y = _apply_profile_offset(x, y, profile.get('offset', None))
+            if profile_axis == 'x':
+                xdata = _transform_values(x, x_transform)
+                ydata = _transform_values(y, y_transform)
+            else:
+                xdata = _transform_values(y, x_transform)
+                ydata = _transform_values(x, y_transform)
             ax.plot(
-                _transform_values(x, x_transform),
-                _transform_values(y, y_transform),
+                xdata,
+                ydata,
                 label=profile.get('label', profile.get('name', 'p')),
                 color=profile.get('color', color),
                 linestyle=profile.get('linestyle', profile.get('style', linestyle)),
@@ -248,20 +265,42 @@ def plot_profiles(profiles, **kwargs):
                 if xfarm is None or Lfarm is None:
                     raise ValueError("plotfarm=True requires either farm_bounds or both xfarm and Lfarm.")
                 farm_bounds = (xfarm, xfarm + Lfarm)
-            farm_left = _transform_scalar(farm_bounds[0], x_transform)
-            farm_right = _transform_scalar(farm_bounds[1], x_transform)
-            ax.axvspan(
-                min(farm_left, farm_right),
-                max(farm_left, farm_right),
-                facecolor=kwargs.get('farm_facecolor', 'tab:red'),
-                edgecolor=kwargs.get('farm_edgecolor', 'none'),
-                alpha=kwargs.get('farm_alpha', 0.12),
-                linewidth=kwargs.get('farm_linewidth', 0),
-                zorder=kwargs.get('farm_zorder', 0),
-            )
+            if profile_axis == 'x':
+                farm_left = _transform_scalar(farm_bounds[0], x_transform)
+                farm_right = _transform_scalar(farm_bounds[1], x_transform)
+                ax.axvspan(
+                    min(farm_left, farm_right),
+                    max(farm_left, farm_right),
+                    facecolor=kwargs.get('farm_facecolor', 'tab:red'),
+                    edgecolor=kwargs.get('farm_edgecolor', 'none'),
+                    alpha=kwargs.get('farm_alpha', 0.12),
+                    linewidth=kwargs.get('farm_linewidth', 0),
+                    zorder=kwargs.get('farm_zorder', 0),
+                )
+            else:
+                farm_bottom = _transform_scalar(farm_bounds[0], y_transform)
+                farm_top = _transform_scalar(farm_bounds[1], y_transform)
+                ax.axhspan(
+                    min(farm_bottom, farm_top),
+                    max(farm_bottom, farm_top),
+                    facecolor=kwargs.get('farm_facecolor', 'tab:red'),
+                    edgecolor=kwargs.get('farm_edgecolor', 'none'),
+                    alpha=kwargs.get('farm_alpha', 0.12),
+                    linewidth=kwargs.get('farm_linewidth', 0),
+                    zorder=kwargs.get('farm_zorder', 0),
+                )
 
         if zeroline:
-            ax.axhline(0, color=kwargs.get('zeroline_color', '0.4'), linewidth=kwargs.get('zeroline_width', 0.7), linestyle=kwargs.get('zeroline_style', '--'), zorder=0)
+            zeroline_kwargs = {
+                "color": kwargs.get('zeroline_color', '0.4'),
+                "linewidth": kwargs.get('zeroline_width', 0.7),
+                "linestyle": kwargs.get('zeroline_style', '--'),
+                "zorder": 0,
+            }
+            if profile_axis == 'x':
+                ax.axhline(0, **zeroline_kwargs)
+            else:
+                ax.axvline(0, **zeroline_kwargs)
 
         if xscale is not None:
             ax.set_xscale(xscale)
@@ -308,91 +347,163 @@ def plot_profiles(profiles, **kwargs):
             )
         if tight_layout:
             plt.tight_layout()
-        if export is None:
-            export = "streamwise_linear_profiles.png"
-        print(export)
-        fig.savefig(export, dpi=dpi, bbox_inches=kwargs.get('bbox_inches', None), pad_inches=kwargs.get('pad_inches', 0.1))
+        if export is not False:
+            if export is None:
+                export = "streamwise_linear_profiles.png"
+            print(export)
+            fig.savefig(export, dpi=dpi, bbox_inches=kwargs.get('bbox_inches', None), pad_inches=kwargs.get('pad_inches', 0.1))
         if close:
             plt.close(fig)
         return fig, ax
 
 profiles = [
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/base_adv_u_only_avg_x.csv",
-        'label': r'$\overline{u}^b \partial_x \Delta{\overline{u}}$',
+        'file': 
+            [
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_baseadv_u_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_baseadv_v_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_baseadv_w_avg_x.csv",
+             ],
+        'label': r'$\overline{u}_j^b \partial_j \Delta{\overline{u}}$',
         'color': 'k',
         'style': '-',
-        'ygain': rmsgain,
+        'ygain': lineargain,
         "linewidth": lw,
     },
-    
+
     {
-        'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/tilt_adv_u_only_avg_x.csv",
-        'label': r'$\Delta \overline{w} \partial_z {\overline{u}^b}$',
+        'file': 
+            [
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_tiltadv_u_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_tiltadv_v_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_tiltadv_w_avg_x.csv",
+                ],
+        'label': r'$\Delta \overline{u}_j \partial_j {\overline{u}^b}$',
         'color': 'tab:green',
         'style': '-',
-        'ygain': rmsgain,
+        'ygain': lineargain,
+        "linewidth": lw,
+    },
+
+    {
+        'file': 
+            [
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_nonlinadv_u_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_nonlinadv_v_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_nonlinadv_w_avg_x.csv",
+                ],
+        'label': r'$\Delta \overline{u}_j \partial_j {\Delta \overline{u}}$',
+        'color': 'tab:red',
+        'style': '-',
+        'ygain': lineargain,
         "linewidth": lw,
     },
 
     # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/nonlin_adv_u_avg_x.csv",
-    #     'label': r'$\Delta \overline{u}_j \partial_j \Delta{\overline{u}}$',
-    #     'color': 'tab:red',
-    #     'style': '-',
-    #     'ygain': rmsgain,
-    #     "linewidth": lw,
-    # },
-
-
-    # {
-    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/ddx_dp_avg_x.csv',
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_deltap_avg_x.csv',
     #     'label': r'$\partial_x \Delta \overline{p}$',
     #     'color': 'tab:blue',
     #     'style': '-',
-    #     'ygain': rmsgain,
+    #     'ygain': lineargain,
     #     "linewidth": lw,
     #     # 'offset': 140,
     # },
 
-    # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Reynolds_DD_u_avg_x.csv",
-    #     'label': r'$\partial_j \overline{\Delta u^\prime \Delta u_j^\prime}$',
-    #     'color': 'tab:orange',
-    #     'style': '-',
-    #     'ygain': rmsgain,
-    #     "linewidth": lw,
-    # },
+    {
+        'file': 
+        [
+            "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudu_avg_x.csv",
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudv_avg_x.csv",
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudw_avg_x.csv",
+        ],
+        'label': r'$\partial_x \overline{\Delta u^\prime \Delta u^\prime}$',
+        'color': 'tab:brown',
+        'style': '-',
+        'ygain': lineargain,
+        "linewidth": lw,
+    },
+    
+    {
+        'file': 
+        [
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudu_avg_x.csv",
+            "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudv_avg_x.csv",
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudw_avg_x.csv",
+        ],
+        'label': r'$\partial_y \overline{\Delta u^\prime \Delta v^\prime}$',
+        'color': 'tab:orange',
+        'style': '-',
+        'ygain': lineargain,
+        "linewidth": lw,
+    },
 
+    {
+        'file': 
+        [
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudu_avg_x.csv",
+            #"/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudv_avg_x.csv",
+            "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dudw_avg_x.csv",
+        ],
+        'label': r'$\partial_z \overline{\Delta u^\prime \Delta w^\prime}$',
+        'color': 'tab:blue',
+        'style': '-',
+        'ygain': lineargain,
+        "linewidth": lw,
+    },
+
+        {
+        'file': 
+            [
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dubu_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dubv_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_dubw_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_budu_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_budv_avg_x.csv",
+                "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_Reynolds_budw_avg_x.csv",
+            ],
+        'label': r'$\partial_j \overline{\Delta u^\prime  {u_j^\prime}^b} +\partial_j \overline{ {u^\prime}^b  \Delta {u_j^\prime}}$',
+        'color': 'purple',
+        'style': '-',
+        'ygain': lineargain,
+        "linewidth": lw,
+    },
 
     # {
-    #     'file': "/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/Reynolds_rest_u_avg_x.csv",
-    #     'label': r'$\partial_j \overline{\Delta u^\prime  {u_j^\prime}^b} +\partial_j \overline{ {u^\prime}^b  \Delta {u_j^\prime}}$',
-    #     'color': 'purple',
-    #     'style': '-',
-    #     'ygain': rmsgain,
-    #     "linewidth": lw,
-    # },
-
-    # {
-    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/SGS_du_avg_x.csv',
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_SGS_avg_x.csv',
     #     'label': r'$\partial_j \Delta \overline{\tau}_{1j}$',
     #     'color': 'tab:cyan',
     #     'style': '-',
-    #     'ygain': rmsgain,
+    #     'ygain': lineargain,
     #     "linewidth": lw,
     # },
 
     # {
-    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/COR_du_avg_x.csv',
+    #     'file':'/anvil/scratch/x-kali/PadeOpsSims/INV800-5K/profiles/x_COR_avg_x.csv',
     #     'label': r'${2}{\mathrm{Ro}}^{-1} \sin{\phi} \,\Delta{\overline{v}}$',
     #     'color': 'tab:brown',
     #     'style': '-',
-    #     'ygain': rmsgain,
+    #     'ygain': lineargain,
     #     "linewidth": lw,
     # },
 
 ]
+
+
+def copy_profiles_with_avg_z(profiles):
+    z_profiles = []
+    for profile in profiles:
+        z_profile = profile.copy()
+        files = profile['file']
+        if isinstance(files, (list, tuple)):
+            z_profile['file'] = [path.replace("_avg_x.csv", "_avg_z.csv") for path in files]
+        else:
+            z_profile['file'] = files.replace("_avg_x.csv", "_avg_z.csv")
+        z_profile['ygain'] = z_lineargain
+        z_profiles.append(z_profile)
+    return z_profiles
+
+
+z_profiles = copy_profiles_with_avg_z(profiles)
 
 
 
@@ -400,7 +511,7 @@ axis_style = {
     "xlft": -0.5*Lfarm + xfarm,
     "xrght": 3.*Lfarm + xfarm,
     "xlabel": r"$x$",
-    "ylabel": r"$y$-$z$ mean",
+    "ylabel": r"$\langle \cdot \rangle_{yz}\,(\times 10^{-9})$",
     "xaxis_transformer": {
         "function": lambda x: (x - xfarm) / Lfarm,
         "inverse": lambda xt: xt * Lfarm + xfarm,
@@ -408,7 +519,22 @@ axis_style = {
         "label": r"$(x-x_0)/L_p$",
     },
     "transform_axes_data": False,
-    #"ybot": 0,
+    "ybot": -2,
+}
+
+z_axis_style = {
+    "xlabel": r"$\langle \cdot \rangle_{xz}\,(\times 10^{-9})$",
+    "ylabel": r"$z/z_h$",
+    "yaxis_transformer": {
+        "function": lambda z: z / zh,
+        "inverse": lambda zt: zt * zh,
+        "ticks": np.arange(0, 5, 1),
+        "label": r"$z/z_h$",
+    },
+    "transform_axes_data": False,
+    "profile_axis": "y",
+    "ybot": 0,
+    "ytop": 5*zh,
 }
 
 overlay_style = {
@@ -418,7 +544,7 @@ overlay_style = {
 }
 
 plot_style = {
-    "figsize": (5, 3),
+    "figsize": (6, 3),
     "dpi": 200,
     "hide_top_right_spines": True,
     "legend": True,
@@ -428,6 +554,34 @@ plot_style = {
 }
 
 if __name__ == "__main__":
+    # with plt.rc_context({"text.usetex": True, "font.family": "serif"}):
+    #     fig, axes = plt.subplots(1, 2, figsize=(10, 3), dpi=plot_style["dpi"])
+    #     panel_plot_style = {**plot_style, "tight_layout": False}
+    #     z_plot_style = {**panel_plot_style, "legend": False}
+
+    #     plot_profiles(
+    #         profiles,
+    #         **panel_plot_style,
+    #         **axis_style,
+    #         **overlay_style,
+    #         ax=axes[0],
+    #         export=False,
+    #     )
+
+    #     plot_profiles(
+    #         z_profiles,
+    #         **z_plot_style,
+    #         **z_axis_style,
+    #         ax=axes[1],
+    #         export=False,
+    #         zeroline=True,
+    #     )
+
+    #     fig.tight_layout()
+    #     export = "streamwise_linear_profiles.png"
+    #     print(export)
+    #     fig.savefig(export, dpi=plot_style["dpi"], pad_inches=0.1)
+
     plot_profiles(
         profiles,
         **plot_style,

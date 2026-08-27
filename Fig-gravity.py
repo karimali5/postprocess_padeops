@@ -17,6 +17,7 @@ Wfarm = 95.61-63.11
 Zfarm = 1
 hubheight = 95/126
 
+
 # S800_h0 = np.mean(read_netcdf_slice(os.path.join(S800['path'], f'Run09_t{S800["timestamp"]}_INVH0.nc'), scale=1/126)["data"])
 # S250_h0 = np.mean(read_netcdf_slice(os.path.join(S250['path'], f'Run09_t{S250["timestamp"]}_INVH0.nc'), scale=1/126)["data"])
 
@@ -38,7 +39,7 @@ def blh_files_y(sim, y):
     ]
 
 plot_style = {
-    "figsize": (5.4, 2.55),
+    "figsize": (7, 3.5),
     "panel_order": "row",
     "annotation": True,
     "ncols":1,
@@ -67,18 +68,18 @@ field_style = {
 
 axis_style = {
     "equal_aspect": True,
-    "ytop": 0.8*Wfarm+yfarm,
-    "ybot": -0.8*Wfarm+yfarm,
+    # "ytop": 0.8*Wfarm+yfarm,
+    # "ybot": -0.8*Wfarm+yfarm,
     "xrght": 5*Lfarm+xfarm,
     "xlft": -0.5*Lfarm+xfarm,
     "xlabel": r"$y$",
     "ylabel": r"$z$",
     "aspect": None,
     "yaxis_transformer": {
-        "function": lambda x: (x - yfarm) / Wfarm,
-        "inverse": lambda xt: xt * Wfarm + yfarm,
-        "ticks": [-0.8,-0.4,0,0.4,0.8],
-        "label": r"$(y-y_0)/W_p$",
+        "function": lambda x: x*126/1000,
+        "inverse": lambda xt: xt*1000/126 ,
+        "ticks": np.arange(0, 8.2, 2),
+        "label": r"$z\,[\mathrm{km}]$",
     },
     "xaxis_transformer": {
             "function": lambda x: (x - xfarm) / Lfarm,
@@ -123,8 +124,9 @@ colorbar_style = {
     "colorbar_label_x": 0.9,
     "colorbar_label_y": 1.1,
     "colorbar_groups": [
-        {"indices": range(0, 1), "label": r""},
+        {"indices": range(0, 1), "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
         {"indices": range(1, 2), "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
+        {"indices": range(2, 3), "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
     ],
 }
 
@@ -143,29 +145,31 @@ plot_slices(
         [
             {
                 "filename": [
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget0_term01_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
+                    os.path.join(S800_5K["path"], "delta_w_SL_y=79p3625.nc"),
                 ],
-                "name": r"$\Delta \overline{u}$",
+                "name": r"$\Delta \overline{w}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 1,
+                'fieldgain': 1000,
                 #'s': 35,
             },
 
             {
                 "filename": [
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term01_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term07_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term12_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term15_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term07_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term12_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term15_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
+                    os.path.join(S800_5K["path"], "delta_buoyancy_SL_y=79p3625.nc"),
                 ],
-                "name": r"$\Delta \overline{k}$",
+                "name": r"$\mathrm{Fr}^{-2}\, \overline{\theta}_\perp /\theta_0$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 0.5*1000,
+                'fieldgain': 1000,
+                #'s': 35,
+            },
+
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], "ddz_deltap_SL_y=79p3625.nc"),
+                ],
+                "name": r"$\partial_z \Delta \overline{p}$",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain': 1000,
                 #'s': 35,
             },
     
@@ -177,5 +181,5 @@ plot_slices(
         **overlay_style,
         **colorbar_style,
         **font_style,
-        export=f"Wake.png",
+        export=f"Gravity.png",
     )

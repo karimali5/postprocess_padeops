@@ -118,10 +118,10 @@ colorbar_style = {
     "colorbar_label_x": 0.9,
     "colorbar_label_y": 1.1,
     "colorbar_groups": [
-        {"indices": range(0, 3), "location": "right", "s": 0.2, "label": r""},
-        {"indices": range(3, 6), "location": "right", "s": 50, "label": r"$\times 10^{-3}$"},
-        {"indices": range(6, 9), "location": "right", "s": 7.5, "label": r"$\times 10^{-3}$"},
-        #{"indices": range(9, 12), "location": "right", "s": 3, "label": r"$\times 10^{-3}$"},
+        {"indices": range(0, 3), "location": "right", "s": 0.2, "label": r"", "label_x": 3, "label_y": -0.18},
+        {"indices": range(3, 6), "location": "right", "s": 50, "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
+        {"indices": range(6, 9), "location": "right", "s": 7.5, "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
+        #{"indices": range(9, 12), "location": "right", "s": 3, "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
     ],
 }
 

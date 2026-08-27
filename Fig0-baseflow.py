@@ -242,8 +242,8 @@ def plot_profile_panels(profile_panels, **kwargs):
             fig.subplots_adjust(wspace=wspace)
         if tighten_whitespace:
             default_adjust = {
-                "left": 0.09,
-                "right": 0.995,
+                "left": 0.1,
+                "right": 0.98,
                 "bottom": 0.19,
                 "top": 0.88,
                 "wspace": wspace,
@@ -292,7 +292,7 @@ profile_panels = [
             },
         ],
         "xlabel": r"$u,\,v$",
-        "name": r"Wind speed components",
+        "name": r"Velocity components",
         "legend_loc": panel_a_legend_loc,
         "legend_kwargs": {
             "bbox_to_anchor": panel_a_legend_bbox_to_anchor,
@@ -310,11 +310,11 @@ profile_panels = [
                 "color": "k",
                 "style": "-",
                 "linewidth": lw,
-                "transform": lambda theta: theta - 273.15,
+                "transform": lambda theta: theta, #- 273.15,
             },
         ],
-        "xlabel": r"$\theta~[^\circ\mathrm{C}]$",
-        "name": r"Potential Temperature $\langle {\overline{\theta}}^b \rangle_{xy}$",
+        "xlabel": r"$\theta~[\mathrm{K}]$",
+        "name": r"$\langle {\overline{\theta}}^b \rangle_{xy}$",
         "legend": False,
         "auto_xlim_visible": True,
         "horizontal_lines": inversion_lines,
@@ -329,26 +329,26 @@ profile_panels = [
         #     },
         # ],
     },
-    {
-        "profiles": [
-            {
-                "file": f"{profiles_dir}/tke_HA_z.csv",
-                "label": r"$\langle {\overline{k}}^b \rangle_{xy}$",
-                "color": "k",
-                "style": "-",
-                "linewidth": lw,
-            },
-        ],
-        "xlabel": r"$k$",
-        "name": r"TKE $\langle {\overline{k}}^b \rangle_{xy}$",
-        "legend": False,
-        "horizontal_lines": inversion_lines,
-        "xtick_spacing": 0.001,
-    },
+    # {
+    #     "profiles": [
+    #         {
+    #             "file": f"{profiles_dir}/tke_HA_z.csv",
+    #             "label": r"$\langle {\overline{k}}^b \rangle_{xy}$",
+    #             "color": "k",
+    #             "style": "-",
+    #             "linewidth": lw,
+    #         },
+    #     ],
+    #     "xlabel": r"$k$",
+    #     "name": r"TKE $\langle {\overline{k}}^b \rangle_{xy}$",
+    #     "legend": False,
+    #     "horizontal_lines": inversion_lines,
+    #     "xtick_spacing": 0.001,
+    # },
 ]
 
 plot_style = {
-    "figsize": (5.2, 1.8),
+    "figsize": (3.6, 1.8),
     "dpi": 200,
     "hide_top_right_spines": True,
     "legend": True,
@@ -359,7 +359,7 @@ plot_style = {
     "label_fontsize": 7,
     "title_fontsize": 7,
     "tight_layout": True,
-    "wspace": 0.2,
+    "wspace": 0.1,
     "tighten_whitespace": True,
     "plotfarm": True,
     "farm_alpha": 0.12,

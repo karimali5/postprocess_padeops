@@ -38,7 +38,7 @@ def blh_files_y(sim, y):
     ]
 
 plot_style = {
-    "figsize": (5.4, 2.55),
+    "figsize": (7, 3),
     "panel_order": "row",
     "annotation": True,
     "ncols":1,
@@ -114,12 +114,12 @@ colorbar_style = {
     "fixed_colorbar_ticks": True,
     "colorbar_tick_count": 3,
     "colorbar_tick_fontsize": 6,
-    "colorbar_label": r"$\times 10^{-3}$",
+    "colorbar_label": r"$\times 10^{-4}$",
     "colorbar_label_location": "bottom",
     "colorbar_size": "1.6%",
     "colorbar_pad": 0.05,
-    "colorbar_label_x": 0.9,
-    "colorbar_label_y": 1.1,
+    "colorbar_label_x": 3,
+    "colorbar_label_y": 0.9,
     # "colorbar_groups": [
     #     {"indices": range(0, 1), "location": "right", "s": 14, "label": r"$\times 10^{-3}$"},
     # ],
@@ -141,34 +141,34 @@ plot_slices(
             {
                 "filename": [
                     os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term07_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                    #os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
                 ],
                 "name": r"$\varepsilon_{\Delta b}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 100000,
-                's': 35,
+                'fieldgain': 10000,
+                's': 5,
             },
 
             {
                 "filename": [
                     os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term08_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term05_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                    #os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term05_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
                 ],
                 "name": r"$\varepsilon_{b \Delta}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 100000,
-                's': 35,
+                'fieldgain': 10000,
+                's': 5,
             },
 
             {
                 "filename": [
                     os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term09_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                    #os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
                 ],
                 "name": r"$\varepsilon_{\Delta \Delta}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 100000,
-                's': 35,
+                'fieldgain': 10000,
+                's': 5,
             },
 
              {
@@ -179,8 +179,8 @@ plot_slices(
                 ],
                 "name": r"$\Delta \varepsilon$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 100000,
-                's': 35,
+                'fieldgain': 10000,
+                's': 5,
             },
     
         ],

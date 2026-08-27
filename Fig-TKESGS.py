@@ -38,14 +38,14 @@ def blh_files_y(sim, y):
     ]
 
 plot_style = {
-    "figsize": (5.4, 2.55),
+    "figsize": (7, 3),
     "panel_order": "row",
     "annotation": True,
     "ncols":1,
     "wspace": 0.08,
     "hspace": 0.34,
     "hide_top_right_spines": True,
-    "local_colorbars": False,
+    "local_colorbars": True,
 }
 
 field_style = {
@@ -57,7 +57,6 @@ field_style = {
     "cmap_def": "PRGn",
     "vmin": None,
     "vmax": None,
-    "colorbar_range": "data",
     "levels": 200,
     "contours": True,
     "smooth": False,
@@ -67,31 +66,31 @@ field_style = {
 
 axis_style = {
     "equal_aspect": True,
-    "ytop": 0.8*Wfarm+yfarm,
-    "ybot": -0.8*Wfarm+yfarm,
-    "xrght": 5*Lfarm+xfarm,
-    "xlft": -0.5*Lfarm+xfarm,
+    "ytop": 4*hubheight,
+    "ybot": None,
+    "xrght": 0.47*Wfarm+yfarm,
+    "xlft": -0.35*Wfarm+yfarm,
     "xlabel": r"$y$",
     "ylabel": r"$z$",
     "aspect": None,
-    "yaxis_transformer": {
+    "xaxis_transformer": {
         "function": lambda x: (x - yfarm) / Wfarm,
         "inverse": lambda xt: xt * Wfarm + yfarm,
-        "ticks": [-0.8,-0.4,0,0.4,0.8],
+        "ticks": [-0.4,-0.3,-0.2,-0.1,0,0.1,0.2,0.3,0.4],
         "label": r"$(y-y_0)/W_p$",
     },
-    "xaxis_transformer": {
-            "function": lambda x: (x - xfarm) / Lfarm,
-            "inverse": lambda xt: xt * Lfarm + xfarm,
-            "ticks": np.arange(-0.5, 5.1, 0.5),
-            "label": r"$(x-x_0)/L_p$",
-        },
-    # "yaxis_transformer": {
-    #     "function": lambda z: z / hubheight,
-    #     "inverse": lambda zt: zt * hubheight,
-    #     "ticks": np.arange(0, 4.1, 2),
-    #     "label": r"$z/z_h$",
-    # },
+    # "xaxis_transformer": {
+    #         "function": lambda x: (x - xfarm) / Lfarm,
+    #         "inverse": lambda xt: xt * Lfarm + xfarm,
+    #         "ticks": np.arange(-3.75, 10.51, 0.5),
+    #         "label": r"$(x-x_0)/L_f$",
+    #     },
+    "yaxis_transformer": {
+        "function": lambda z: z / hubheight,
+        "inverse": lambda zt: zt * hubheight,
+        "ticks": np.arange(0, 4.1, 2),
+        "label": r"$z/z_h$",
+    },
     "transform_axes_data": False,
 }
 
@@ -112,20 +111,18 @@ overlay_style = {
 colorbar_style = {
     "colorbar_orient": "vertical",
     "colorbar_label_fontsize": 6,
-    "fixed_colorbar_ticks": False,
-    "colorbar_tick_count": 6,
+    "fixed_colorbar_ticks": True,
+    "colorbar_tick_count": 3,
     "colorbar_tick_fontsize": 6,
-    #"colorbar_label": r"",
+    "colorbar_label": r"$\times 10^{-4}$",
     "colorbar_label_location": "bottom",
     "colorbar_size": "1.6%",
     "colorbar_pad": 0.05,
-    "group_colorbar_pad": 0.015,
-    "colorbar_label_x": 0.9,
-    "colorbar_label_y": 1.1,
-    "colorbar_groups": [
-        {"indices": range(0, 1), "label": r""},
-        {"indices": range(1, 2), "label": r"$\times 10^{-3}$", "label_x": 3, "label_y": -0.18},
-    ],
+    "colorbar_label_x": 3,
+    "colorbar_label_y": 0.9,
+    # "colorbar_groups": [
+    #     {"indices": range(0, 1), "location": "right", "s": 14, "label": r"$\times 10^{-3}$"},
+    # ],
 }
 
 font_style = {
@@ -143,30 +140,44 @@ plot_slices(
         [
             {
                 "filename": [
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget0_term01_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
                 ],
-                "name": r"$\Delta \overline{u}$",
+                "name": r"$\mathcal{D}_{b \Delta}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 1,
-                #'s': 35,
+                'fieldgain': 10000,
+                's': 1,
             },
 
             {
                 "filename": [
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term01_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term07_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term12_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term15_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term07_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term12_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
-                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget1_term15_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_z_k={10}.nc"),
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term05_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
                 ],
-                "name": r"$\Delta \overline{k}$",
+                "name": r"$\mathcal{D}_{\Delta b}$",
                 #"blh_file": blh_files_y(S800_5K, yfarm),
-                'fieldgain': 0.5*1000,
-                #'s': 35,
+                'fieldgain': 10000,
+                's': 1,
+            },
+
+            {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$\mathcal{D}_{\Delta \Delta}$",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain': 10000,
+                's': 1,
+            },
+
+             {
+                "filename": [
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term04_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term05_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                    os.path.join(S800_5K["path"], f"Run09_comp_deficit_budget3_term06_t"+S800_5K["timestamp"]+"_n"+S800_5K["nstamp"]+f"_SL_x={165}.nc"),
+                ],
+                "name": r"$\Delta \mathcal{D}$",
+                #"blh_file": blh_files_y(S800_5K, yfarm),
+                'fieldgain': 10000,
+                's': 1,
             },
     
         ],
@@ -177,5 +188,5 @@ plot_slices(
         **overlay_style,
         **colorbar_style,
         **font_style,
-        export=f"Wake.png",
+        export=f"TKESGS_x=165.png",
     )

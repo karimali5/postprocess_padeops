@@ -38,7 +38,7 @@ def blh_files_y(sim, y):
     ]
 
 plot_style = {
-    "figsize": (7.9, 2.4),
+    "figsize": (7, 2.4),
     "panel_order": "row",
     "annotation": "letter_name",
     "ncols":3,
@@ -118,11 +118,11 @@ colorbar_style = {
     "colorbar_label_x": 0.9,
     "colorbar_label_y": 1.1,
     "colorbar_groups": [
-        {"indices": range(0, 3), "location": "right", "s": 0.2, "label": r""},
-        {"indices": range(3, 6), "location": "right", "s": 50, "label": r"$\times 10^{-3}$"},
-        {"indices": range(6, 9), "location": "right", "s": 7.5, "label": r"$\times 10^{-3}$"},
-        {"indices": range(9, 12), "location": "right", "s": 4, "label": r"$\times 10^{-3}$"},
-        {"indices": range(12, 15), "location": "right", "s": 4, "label": r"$\times 10^{-3}$"},
+        {"indices": range(0, 3), "location": "right", "s": 0.2, "label": r"", "label_x": 3, "label_y": -0.25},
+        {"indices": range(3, 6), "location": "right", "s": 50, "label": r"$\times 10^{-3}$", "label_x": 2, "label_y": -0.7},
+        {"indices": range(6, 9), "location": "right", "s": 7.5, "label": r"$\times 10^{-3}$", "label_x": 2, "label_y": -0.7},
+        {"indices": range(9, 12), "location": "right", "s": 4, "label": r"$\times 10^{-3}$", "label_x": 2, "label_y": -0.7},
+        {"indices": range(12, 15), "location": "right", "s": 4, "label": r"$\times 10^{-3}$", "label_x": 2, "label_y": -0.7},
     ],
 }
 
